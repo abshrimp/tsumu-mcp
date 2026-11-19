@@ -4,7 +4,8 @@ import { test } from "node:test";
 import { consentLocale } from "../src/consent-locales.js";
 import { guideMessages } from "../src/guide-locales.js";
 import { guidePage, guideResponse, guideCsp } from "../src/guide-page.js";
-import { PLUGIN_CLIENTS, pluginCatalog, pluginCatalogResponse, pluginLinks, safePluginUrl } from "../src/guide-links.js";
+import { MCP_URL, manualGuideMessages } from "../src/manual-guide-locales.js";
+import { GUIDE_MODE, PLUGIN_CLIENTS, pluginCatalog, pluginCatalogResponse, pluginLinks, safePluginUrl } from "../src/guide-links.js";
 
 const keysOf = value => Array.isArray(value)
   ? value.map(keysOf)
@@ -12,6 +13,11 @@ const keysOf = value => Array.isArray(value)
 
 test("Japanese and English guide text have the same shape", () => {
   assert.deepEqual(keysOf(guideMessages.ja), keysOf(guideMessages.en));
+  assert.deepEqual(keysOf(manualGuideMessages.ja), keysOf(manualGuideMessages.en));
+});
+
+test("the guide mode is one of the two guides", () => {
+  assert.ok(["manual", "plugins"].includes(GUIDE_MODE));
 });
 
 test("the guide language follows ?lang, then the browser's languages", () => {
@@ -25,7 +31,7 @@ test("the guide language follows ?lang, then the browser's languages", () => {
 
 test("both languages render every client, both flows and existing screenshots", () => {
   for (const locale of ["ja", "en"]) {
-    const html = guidePage(locale);
+    const html = guidePage(locale, "plugins");
     assert.match(html, new RegExp("<html lang='" + locale + "'>"));
     assert.match(html, /id='new-site'/);
     assert.match(html, /id='edit-site'/);
@@ -45,12 +51,33 @@ test("both languages render every client, both flows and existing screenshots", 
     assert.doesNotMatch(html, /mcp\.tsumu\.ebii\.net\/mcp|mcpServers|serverUrl|httpUrl/, "no manual MCP setup on the public guide");
     assert.match(html, /href='https:\/\/github\.com\/abshrimp\/tsumu-mcp'><svg class='gh'/, "GitHub links carry the GitHub mark");
   }
-  assert.match(guidePage("ja"), /新しいサイトを AI に作ってもらう/);
-  assert.match(guidePage("en"), /Have the AI build a new site/);
+  assert.match(guidePage("ja", "plugins"), /新しいサイトを AI に作ってもらう/);
+  assert.match(guidePage("en", "plugins"), /Have the AI build a new site/);
+});
+
+test("the manual guide gives every client setup steps with the MCP URL", () => {
+  for (const locale of ["ja", "en"]) {
+    const html = guidePage(locale, "manual");
+    assert.match(html, new RegExp("<html lang='" + locale + "'>"));
+    assert.ok(html.includes(MCP_URL), "shows the MCP server URL");
+    assert.match(html, /id='new-site'/);
+    assert.match(html, /id='edit-site'/);
+    for (const { id } of PLUGIN_CLIENTS) {
+      assert.match(html, new RegExp("<article class='client' id='app-" + id + "'"));
+      assert.ok(manualGuideMessages[locale].clients[id].steps.length >= 2, "steps for " + id);
+    }
+    assert.match(html, /&#34;serverUrl&#34;/, "Antigravity uses serverUrl");
+    assert.match(html, /gemini mcp add --transport http/);
+    assert.doesNotMatch(html, /data-plugin=/, "no plugin buttons in manual mode");
+    for (const path of [...html.matchAll(/src='(\/guide\/[^']+)'/g)].map(match => match[1])) {
+      assert.ok(existsSync(new URL("../public" + path, import.meta.url)), "missing screenshot " + path);
+    }
+    assert.doesNotMatch(html, /<script/, "the guide has no scripts");
+  }
 });
 
 test("a client without a public plugin URL is marked as coming soon", () => {
-  const html = guidePage("en");
+  const html = guidePage("en", "plugins");
   for (const { id } of PLUGIN_CLIENTS) {
     if (safePluginUrl(pluginLinks[id])) continue;
     assert.match(html, new RegExp("id='app-" + id + "' data-plugin='pending'"));
@@ -95,5 +122,6 @@ test("the guide response is HTML with a strict CSP", async () => {
   assert.doesNotMatch(guideCsp, /unsafe-eval/);
   assert.equal(response.headers.get("vary"), "Accept-Language");
   assert.match(await response.text(), /AIアプリから、Tsumuのサイトを作る・編集する/);
+  assert.match(await guideResponse("ja", "GET", "plugins").text(), /プラグインを入手|準備中/);
   assert.equal(await guideResponse("en", "HEAD").text(), "");
 });

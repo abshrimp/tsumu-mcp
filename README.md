@@ -43,7 +43,7 @@ A connection authorizes **only the paired site** and does not automatically foll
 
 ## AI client plugins and distribution
 
-Plugin listing URLs live in one place, [`src/guide-links.js`](src/guide-links.js). Set each `https://` URL once its listing is public; the guide at `/` covers plugins only (no manual MCP setup) and is meant to go public after every listing is set. Published plugins (with icons) are also listed at `/plugins.json`, which the Tsumu editor reads to show plugin links in its MCP connection dialog, so the editor needs no redeploy. Client icons are bundled in `public/plugin-icons/` (see its NOTICE).
+The guide at `/` has two versions, chosen by `GUIDE_MODE` in [`src/guide-links.js`](src/guide-links.js): `"manual"` (step-by-step manual MCP setup for each client, with screenshots in `public/guide/apps/`) while the plugin listings are under review, and `"plugins"` (one plugin link per client, no manual setup). Both stay in the code, so switching is a one-line change. Plugin listing URLs live in the same file; set each `https://` URL once its listing is public, then switch `GUIDE_MODE` to `"plugins"`. Published plugins (with icons) are also listed at `/plugins.json`, which the Tsumu editor reads to show plugin links in its MCP connection dialog, so the editor needs no redeploy. Client icons are bundled in `public/plugin-icons/` (see its NOTICE).
 
 The OAuth-protected remote MCP endpoint supports these AI clients:
 

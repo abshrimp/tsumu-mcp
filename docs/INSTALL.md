@@ -19,7 +19,7 @@ For an existing site, the browser tab holds the document and authorizes the conn
 
 Each existing-site grant is limited to that paired site. A newly created site must be opened and paired separately before the AI client can edit it. Do not share connection codes or import links.
 
-A screenshot guide for end users (Japanese and English; plugins only, without the manual setup below) is served at https://mcp.tsumu.ebii.net/.
+A screenshot guide for end users (Japanese and English) is served at https://mcp.tsumu.ebii.net/. While the plugin listings are under review it shows the manual setup for each client; `GUIDE_MODE` in `src/guide-links.js` switches it to the plugin-only guide.
 
 The authorization page changes after Tsumu has issued a code in the browser: before that, it leads with **Allow new-site creation only** and keeps the code field under **Have a connection code? Use it here**; afterwards, the code field comes first.
 

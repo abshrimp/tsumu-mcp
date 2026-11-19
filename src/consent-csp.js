@@ -13,9 +13,14 @@ export function consentCsp(redirectUri) {
   if (scheme !== "http:" && scheme !== "https:") {
     throw new Error("Unsupported OAuth callback scheme");
   }
-  // Known client icons are served from this origin; arbitrary domains provided
-  // by a client are never added to this policy.
+  // The ChatGPT OAuth relay redirects from chatgpt.com to platform.openai.com.
+  // Chrome and Safari enforce form-action across that redirect as well.
+  // Only allow this additional origin for the exact, validated ChatGPT callback.
+  const relayOrigin = callback.origin === "https://chatgpt.com" &&
+    callback.pathname === "/connector_platform_oauth_redirect"
+    ? " https://platform.openai.com"
+    : "";
   return "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; " +
-    "form-action 'self' " + callback.origin + "; " +
+    "form-action 'self' " + callback.origin + relayOrigin + "; " +
     "frame-ancestors 'none'; base-uri 'none'";
 }

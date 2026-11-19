@@ -33,7 +33,7 @@ function visitSource(directory, prefix = "") {
     const absolute = join(directory, entry.name);
     if (entry.isDirectory()) visitSource(absolute, rel + "/");
     else {
-      assert.ok(entry.isFile() && /\\.(md|json|txt|yaml|yml)$/.test(entry.name),
+      assert.ok(entry.isFile() && /\.(md|json|txt|yaml|yml)$/.test(entry.name),
         "Claude marketplace Skill files must be safe text resources: " + rel);
       sourceFiles.add(rel);
     }

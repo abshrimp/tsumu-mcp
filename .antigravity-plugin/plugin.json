@@ -4,7 +4,7 @@
   "displayName": "Tsumu",
   "version": "0.1.0",
   "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server.",
-  "logo": "assets/tsumu.svg",
+  "logo": "assets/tsumu-antigravity.svg",
   "suggestedPrompts": [
     "List the pages in the Tsumu site I have paired.",
     "Build a responsive landing page in my connected Tsumu site.",

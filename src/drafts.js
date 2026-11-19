@@ -19,7 +19,7 @@ function editorOrigin(value) {
   return url.origin;
 }
 
-/** Only OAuth-authenticated MCP calls may stage a document. */
+/** Used by OAuth-authenticated MCP calls and the credential-gated fixed review fixture. */
 export async function stageSiteDoc(env, sessionId, doc, chosenEditorOrigin) {
   // Reject unsupported AI-generated node/style shapes before using draft quota.
   // Full structural and security validation is repeated by the editor on import.

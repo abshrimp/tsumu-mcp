@@ -61,6 +61,8 @@ test("authenticated HTTP endpoint advertises typed editing and creation tools", 
   for (const tool of tools) {
     assert.equal(tool.inputSchema.type, "object");
     assert.ok(tool.description);
+    assert.equal(typeof tool.annotations.title, "string");
+    assert.ok(tool.annotations.title.trim());
     assert.equal(typeof tool.annotations.readOnlyHint, "boolean");
     assert.equal(typeof tool.annotations.destructiveHint, "boolean");
     assert.equal(tool.annotations.openWorldHint, false);

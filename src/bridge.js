@@ -104,8 +104,11 @@ export async function redeemPairing(env, code, requesterIp) {
     method: "POST", body: JSON.stringify({ hash, requester }),
   });
   if (!result.ok) {
+    if (result.status !== 400 && result.status !== 429) {
+      throw new Error("Pairing service unavailable");
+    }
     const data = await result.json();
-    throw new Error(data.error || "Unable to pair");
+    throw new Error(data.error || "Invalid or expired code");
   }
   const { sessionId, expiresAt } = await result.json();
   const room = env.BROWSER_SESSIONS.getByName(sessionId);
@@ -130,6 +133,7 @@ export async function redeemPairing(env, code, requesterIp) {
   }
   if (!claim.ok) {
     await restoreCode();
+    if (claim.status !== 410) throw new Error("Pairing service unavailable");
     throw new Error("The browser is not connected, or this code was already used");
   }
   return { sessionId, ...(await claim.json()) };

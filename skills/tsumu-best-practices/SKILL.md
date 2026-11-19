@@ -1,10 +1,6 @@
 ---
 name: tsumu-best-practices
-description: Review, audit, or explain improvements to a Tsumu website for visual quality, responsive layout, accessibility, maintainability, scripts, animations, and SiteDoc integrity. Use for requests such as "Tsumuのサイトをレビューして", "デザインを改善する方法を教えて", or "review my Tsumu design". Do not use as the primary creation or editing workflow; use tsumu-build-site for a new site or tsumu-edit-site for actual changes to an existing site.
-license: MIT
-compatibility: Can review supplied Tsumu documents offline; inspecting a live site requires a paired Tsumu MCP editor.
-metadata:
-  author: abshrimp
+description: Review or improve a Tsumu website's visual quality, responsiveness, accessibility, maintainability, scripts, animations, and document integrity; use for design audits and technical questions, not as the primary creation or editing workflow.
 ---
 
 # Review Tsumu site quality

@@ -162,6 +162,19 @@ test("MCP Skills Extension lists bundled instructions and returns canonical skil
   const entry = skills.find(item => item.uri === uri);
   assert.equal(entry.frontmatter.name, "tsumu-build-site");
   assert.match(entry.frontmatter.description, /Tsumu/);
+  assert.match(entry.frontmatter.description, /stage_site_doc/);
+  assert.match(entry.frontmatter.description, /importUrl/);
+  for (const item of skills) {
+    assert.equal(item.frontmatter.license, "MIT");
+    assert.equal(item.frontmatter.metadata?.author, "abshrimp");
+    assert.match(item.frontmatter.compatibility, /Tsumu/);
+    const config = await rpc("resources/read", {
+      uri: `skill://${item.frontmatter.name}/agents/openai.yaml`,
+    });
+    assert.equal(config.response.status, 200, config.body);
+    assert.match(config.message?.result?.contents?.[0]?.text, /allow_implicit_invocation: true/);
+    assert.match(config.message?.result?.contents?.[0]?.text, /default_prompt:.*\\$tsumu-/);
+  }
   const skill = await rpc("skills/get", { uri });
   assert.equal(skill.response.status, 200, skill.body);
   assert.equal(skill.message?.result?.skill?.uri, uri, skill.body);

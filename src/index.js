@@ -1,3 +1,4 @@
+import { reviewPage } from "./review-page.js";
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { bridgeRequest } from "./bridge.js";
 import { importDraftRequest } from "./drafts.js";
@@ -18,6 +19,7 @@ const defaultHandler = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const pathname = url.pathname;
+    if (pathname === "/review") return reviewPage(request, env);
     if (url.origin === ISSUER && pathname === "/.well-known/openai-apps-challenge" && (request.method === "GET" || request.method === "HEAD")) {
       return new Response(request.method === "HEAD" ? null : "IU-4_L-YbSiOtFhVeLwWXsEZ78mE4kI6wJhPe3xTgyI", {
         headers: { "Content-Type": "text/plain" },

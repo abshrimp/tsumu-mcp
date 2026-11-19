@@ -48,7 +48,7 @@ The guide at `/` has two versions, chosen by `GUIDE_MODE` in [`src/guide-links.j
 The OAuth-protected remote MCP endpoint supports these AI clients:
 
 - **ChatGPT / Codex:** add the remote MCP URL as a custom plugin; public directory publication requires a reviewed submission.
-- **Claude / Claude Code:** remote custom connector, a GitHub plugin marketplace and a [dependency-free plugin folder](plugins/claude) for Anthropic's publishing portal.
+- **Claude / Claude Code:** install from the GitHub marketplace `abshrimp/tsumu-mcp` (`tsumu@tsumu-plugins`); the entry points to the [self-contained, dependency-free Claude plugin folder](plugins/claude), which includes all three Skills and remote MCP configuration. For official directory submission, the same isolated folder is used.
 - **Cursor:** plugin manifest and remote `mcp.json`.
 - **Gemini CLI:** installable GitHub extension (`gemini-extension.json`).
 - **Google Antigravity:** plugin manifest and `mcp_config.json` for Streamable HTTP.

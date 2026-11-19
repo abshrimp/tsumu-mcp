@@ -18,13 +18,42 @@ function visit(path) {
   }
 }
 visit(dir);
-const expected = [
+// This self-contained directory is the actual marketplace plugin source.
+const approvedFiles = [
   ".claude-plugin/icon.png",
   ".claude-plugin/plugin.json",
   ".mcp.json",
   "README.md",
+];
+const sourceSkillsRoot = join(repoRoot, "skills");
+const sourceFiles = new Set();
+function visitSource(directory, prefix = "") {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const rel = prefix + entry.name;
+    const absolute = join(directory, entry.name);
+    if (entry.isDirectory()) visitSource(absolute, rel + "/");
+    else {
+      assert.ok(entry.isFile() && /\\.(md|json|txt|yaml|yml)$/.test(entry.name),
+        "Claude marketplace Skill files must be safe text resources: " + rel);
+      sourceFiles.add(rel);
+    }
+  }
+}
+visitSource(sourceSkillsRoot);
+assert.ok(sourceFiles.size >= 3, "Missing canonical Skill files");
+const expected = [
+  ...approvedFiles,
+  ...[...sourceFiles].map(path => "skills/" + path),
 ].sort();
-assert.deepEqual([...files].sort(), expected, "Claude directory folder must contain only approved files");
+assert.deepEqual([...files].sort(), expected,
+  "Claude marketplace plugin must include only approved files and all bundled Skills");
+for (const skillFile of sourceFiles) {
+  assert.equal(
+    readFileSync(join(dir, "skills", skillFile), "utf8"),
+    readFileSync(join(sourceSkillsRoot, skillFile), "utf8"),
+    "Claude marketplace Skill is outdated: " + skillFile + "; run npm run sync:claude",
+  );
+}
 
 const manifest = JSON.parse(readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8"));
 const allowed = new Set([
@@ -75,4 +104,4 @@ for (let offset = 8; offset < png.length;) {
 }
 assert.ok(hasImageData && hasEnd, "Icon must contain PNG image data and an end marker");
 
-console.log("Claude directory plugin isolated: four allowed files, safe remote MCP, icon, policy link");
+console.log("Claude marketplace plugin isolated with synchronized Skills, safe remote MCP, icon, and policy link");

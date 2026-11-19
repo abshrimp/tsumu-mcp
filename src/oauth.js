@@ -65,7 +65,10 @@ export async function authorize(request, env) {
       const quota = await env.PAIRINGS.getByName("global").fetch("https://internal/quota", {
         method: "POST", body: JSON.stringify({ requester, limit: 3 }),
       });
-      if (!quota.ok) return errorResponse(locale, "tooMany", 429, consentHeaders);
+      if (!quota.ok) {
+        return errorResponse(locale, quota.status === 429 ? "tooMany" : "genericError",
+          quota.status === 429 ? 429 : 503, consentHeaders);
+      }
       userId = crypto.randomUUID();
       props = { draftOnly: true, draftGrantId: userId };
     } else {
@@ -89,6 +92,11 @@ export async function authorize(request, env) {
     if (error instanceof AuthorizationError || error instanceof CimdFetchError) {
       return errorResponse(locale, "invalidRequest", 400, consentHeaders);
     }
-    return errorResponse(locale, consentErrorKey(error instanceof Error ? error.message : ""), 400, consentHeaders);
+    const key = consentErrorKey(error instanceof Error ? error.message : "");
+    // A malformed or expired pairing is a user error. Worker/KV/OAuth faults
+    // are temporary server failures, not evidence that the user's code expired.
+    const status = key === "tooMany" ? 429
+      : key === "invalidCode" || key === "expiredCode" ? 400 : 503;
+    return errorResponse(locale, key, status, consentHeaders);
   }
 }

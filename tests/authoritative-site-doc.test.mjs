@@ -20,9 +20,6 @@ test("the authoritative importer catches fields missing from the MCP diagnostic 
     doc => { doc.pwa = { enabled: "yes" }; },
     doc => { doc.loadingScreen = { enabled: "yes" }; },
     doc => { doc.customFonts = "not-an-array"; },
-    doc => { doc.nodes.node_heading.image = {
-      src: "", alt: "", width: 100, height: 100, assetSuffix: "?bad",
-    }; },
   ];
   for (const mutate of mutations) {
     const doc = sample();

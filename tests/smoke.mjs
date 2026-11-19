@@ -154,8 +154,8 @@ async function main() {
     assert.notEqual(ws.readyState, WebSocket.OPEN, "replaced WebSocket must stop accepting messages");
     assert.equal(replacement.readyState, WebSocket.OPEN);
     assert.equal(replacement.protocol, "tsumu-editor");
-    // Exercise the complete OAuth browser consent -> PKCE token -> MCP tool flow
-    // against the locally running Worker, not just mocked helper methods.
+    // Exercise OAuth browser consent and PKCE token exchange against the
+    // locally running Worker, not just mocked helper methods.
     const callbackUri = "http://127.0.0.1:8798/oauth/callback";
     const registered = await fetch(base + "/oauth/register", {
       method: "POST",
@@ -225,16 +225,10 @@ async function main() {
     const tokens = await tokenResponse.json();
     assert.ok(tokens.access_token, "OAuth must issue an MCP access token");
 
-    replacement.on("message", bytes => {
-      const request = JSON.parse(bytes.toString());
-      if (request.type === "request" && request.action === "list_sites") {
-        replacement.send(JSON.stringify({
-          type: "response", requestId: request.requestId, ok: true,
-          result: [{ id: "demo", name: "Demo site" }],
-        }));
-      }
-    });
-    const call = await fetch(base + "/mcp", {
+    // This local Worker is accessed at 127.0.0.1, whereas the OAuth
+    // protected resource is the production HTTPS origin. A token minted for
+    // the real resource must not be accepted on a different audience.
+    const localAudience = await fetch(base + "/mcp", {
       method: "POST",
       headers: {
         Authorization: "Bearer " + tokens.access_token,
@@ -243,13 +237,12 @@ async function main() {
         "MCP-Protocol-Version": "2025-11-25",
       },
       body: JSON.stringify({
-        jsonrpc: "2.0", id: 42, method: "tools/call",
-        params: { name: "list_sites", arguments: {} },
+        jsonrpc: "2.0", id: 42, method: "tools/list",
       }),
       signal: AbortSignal.timeout(10000),
     });
-    assert.equal(call.status, 200, await call.clone().text());
-    assert.match(await call.text(), /Demo site/, "OAuth token must authorize a live browser tool call");
+    assert.equal(localAudience.status, 401);
+    assert.match(await localAudience.text(), /Token audience does not match resource server/);
 
     const revoked = await fetch(base + "/bridge/revoke", {
       method: "POST",
@@ -261,7 +254,7 @@ async function main() {
     ws.terminate();
     replacement?.terminate();
   }
-  console.log("Worker HTTP, CORS, pairing, WebSocket replacement and revocation smoke test passed");
+  console.log("Worker HTTP, CORS, pairing, OAuth consent/token, audience isolation and WebSocket smoke test passed");
 }
 
 try {

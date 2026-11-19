@@ -31,7 +31,7 @@ export function reviewFixture() {
   doc.siteName = "Tsumu reviewer sample";
   doc.lang = "en";
   Object.assign(doc.pages.page_home, { name: "Home", title: doc.siteName, description: "Synthetic review fixture" });
-  doc.nodes.node_heading.text.content = "Welcome to Tsumu";
+  doc.nodes.node_heading.text.content = "Tsumu Review Home";
   doc.nodes.node_description.text.content = "A disposable synthetic site for review. Edit this sample without publishing.";
   doc.nodes.node_link.text.content = "Review sample";
   doc.pages.page_404 = { id: "page_404", name: "404", slug: "404", title: "Not found", description: "Synthetic error page", children: [] };
@@ -58,7 +58,7 @@ export async function reviewPage(request, env) {
   try {
     // Dedicated object and namespaced keys never spend normal pairing quota.
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-    for (const [key, limit] of [["review-global", 12], ["review-ip:" + ip, 3]]) {
+    for (const [key, limit] of [["review-ip:" + ip, 3], ["review-global", 12]]) {
       const result = await quota(env, key, limit);
       if (!result.ok) return page("<p>Sign-in temporarily unavailable. Please try later.</p>", result.status === 429 ? 429 : 503);
     }

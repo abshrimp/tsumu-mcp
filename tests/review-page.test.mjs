@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { reviewPage, reviewFixture } from "../src/review-page.js";
+import { sha256 } from "../src/pair-code.js";
 import { checkStagedSiteDoc } from "../src/site-doc-check.js";
 const origin = "https://mcp.tsumu.ebii.net";
 // Ephemeral test-only input. Never a configured reviewer credential.
@@ -54,4 +55,12 @@ test("revocation disables login and errors do not expose exception content", asy
   const s = setup(); delete s.env.REVIEW_PASSWORD_HASH; assert.equal((await reviewPage(post(), s.env)).status, 404);
   const t = setup(); t.env.IMPORT_DRAFTS.getByName = () => { throw new Error("private error detail"); };
   const r = await reviewPage(post(), t.env); assert.equal(r.status, 503); assert.ok(!(await r.text()).includes("private error detail"));
+});
+
+test("IP rejection does not spend global quota, and untrusted forwarded IP is ignored", async () => {
+  const s = setup(); const keys = [];
+  s.env.PAIRINGS.getByName = () => ({ fetch: async (_, init) => { keys.push(JSON.parse(init.body)); return new Response(null, { status: 429 }); } });
+  const r = await reviewPage(post(undefined, undefined, { "X-Forwarded-For": "untrusted" }), s.env);
+  assert.equal(r.status, 429); assert.deepEqual(keys, [{ requester: await sha256("review-ip:unknown"), limit: 3 }]);
+  assert.equal(reviewFixture().nodes.node_heading.text.content, "Tsumu Review Home");
 });

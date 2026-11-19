@@ -50,7 +50,7 @@ assert.equal(gemini.name, "tsumu-mcp");
 assert.equal(gemini.version, version);
 assert.equal(cursor.mcpServers, "mcp.json");
 assert.equal(claudeMarketplace.name, "tsumu-plugins");
-assert.deepEqual(claudeMarketplace.plugins.map(x => [x.name, x.source]), [["tsumu", "./"]]);
+assert.deepEqual(claudeMarketplace.plugins.map(x => [x.name, x.source]), [["tsumu", "./plugins/claude"]]);
 for (const manifest of [cursor, antigravity]) {
   assert.ok(existsSync(new URL("../" + manifest.logo, import.meta.url)), "Missing logo: " + manifest.logo);
 }

@@ -15,4 +15,6 @@ The remote server exposes read operations, named-page creation, typed element ed
 - [Connection and troubleshooting guide](https://github.com/abshrimp/tsumu-mcp/blob/main/docs/INSTALL.md)
 - [Support and issue reports](https://github.com/abshrimp/tsumu-mcp/issues)
 
-This distribution folder intentionally contains **no executable code, package manager files, dependency installation, hooks or scripts**. It connects to the hosted MCP server over HTTPS. Source and operating details are available in the parent repository.
+This self-contained distribution folder is the **source** for the GitHub marketplace entry `tsumu@tsumu-plugins`, and it also serves directory submissions. It bundles the three Tsumu Skills and all reference documents. The files under `skills/` are synchronized from the repository's top-level `skills/` using `npm run sync:claude`; CI rejects stale copies.
+
+It intentionally contains **no executable code, package manager files, dependency installation, hooks or scripts**. It connects to the hosted MCP server over HTTPS. Source and operating details are available in the parent repository.

@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "tsumu",
-      "source": "./",
+      "source": "./plugins/claude",
       "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server."
     }
   ]

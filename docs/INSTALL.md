@@ -45,7 +45,9 @@ Add a custom remote MCP server in ChatGPT Plugins. Set its URL to the MCP endpoi
 
 In Claude, go to Customize → Connectors → Add → Custom → Web, enter the MCP endpoint and follow the OAuth pairing. You may use the Claude published client identity or dynamic registration where supported.
 
-For Claude Code, a GitHub-hosted plugin marketplace is included:
+For Claude Chat, Desktop, Cowork, and Claude Code, the GitHub marketplace is at `abshrimp/tsumu-mcp`. In Claude, open **Customize → Plugins → Add → Add marketplace**, enter this repository, and install **Tsumu** from **tsumu-plugins**. The marketplace uses `plugins/claude/` as its plugin root to avoid treating the server source and build scripts as plugin files. The dedicated folder bundles the remote MCP configuration, icon, and all three Skills with their references. Authorize the remote MCP connection after installation.
+
+For Claude Code, the same GitHub-hosted plugin marketplace is included:
 
     /plugin marketplace add abshrimp/tsumu-mcp
     /plugin install tsumu@tsumu-plugins

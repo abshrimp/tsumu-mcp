@@ -15,7 +15,8 @@
     "build": "npm run generate:skills && wrangler deploy --dry-run",
     "deploy": "npm run generate:skills && wrangler deploy",
     "smoke": "node tests/smoke.mjs",
-    "generate:skills": "node scripts/generate-skills.mjs"
+    "generate:skills": "node scripts/generate-skills.mjs",
+    "sync:claude": "node scripts/sync-claude-plugin.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "1.2.4",

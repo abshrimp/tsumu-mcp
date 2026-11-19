@@ -107,11 +107,30 @@ export async function redeemPairing(env, code, requesterIp) {
     const data = await result.json();
     throw new Error(data.error || "Unable to pair");
   }
-  const { sessionId } = await result.json();
+  const { sessionId, expiresAt } = await result.json();
   const room = env.BROWSER_SESSIONS.getByName(sessionId);
-  const claim = await room.fetch("https://internal/claim", {
-    method: "POST", body: "{}",
-  });
-  if (!claim.ok) throw new Error("The browser is not connected, or this code was already used");
+  const restoreCode = async () => {
+    // The registry removed the code atomically before the browser claim.
+    // If its tab went offline in between, allow another attempt without a new code.
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) return;
+    try {
+      await env.PAIRINGS.getByName("global").fetch("https://internal/restore", {
+        method: "POST", body: JSON.stringify({ hash, sessionId, expiresAt }),
+      });
+    } catch { /* The original claim failure is more useful to report. */ }
+  };
+  let claim;
+  try {
+    claim = await room.fetch("https://internal/claim", {
+      method: "POST", body: "{}",
+    });
+  } catch (error) {
+    await restoreCode();
+    throw error;
+  }
+  if (!claim.ok) {
+    await restoreCode();
+    throw new Error("The browser is not connected, or this code was already used");
+  }
   return { sessionId, ...(await claim.json()) };
 }

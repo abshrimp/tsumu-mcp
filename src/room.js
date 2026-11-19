@@ -180,7 +180,7 @@ export class BrowserSession extends DurableObject {
   }
 
   async webSocketMessage(socket, data) {
-    if (typeof data !== "string" || data.length > 1024 * 1024) return;
+    if (typeof data !== "string" || data.length > 4 * 1024 * 1024) return;
     const session = await this.session();
     if (!this.active(session) || socket.deserializeAttachment()?.connectionId !== session.connectionId) return;
     let message;

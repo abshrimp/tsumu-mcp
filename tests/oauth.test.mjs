@@ -127,9 +127,36 @@ test("quota rejection clears the consumed consent cookie", async () => {
 
 test("pairing failure clears the consumed consent cookie", async () => {
   const fixture = await consentFixture();
-  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => Response.json({ error: "Invalid or expired pairing code" }, { status: 404 }) }) };
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => Response.json({ error: "Invalid or expired pairing code" }, { status: 400 }) }) };
   const response = await authorize(fixture.request("approve"), fixture.env);
   assert.equal(response.status, 400);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+});
+
+test("OAuth pairing rate limits use HTTP 429 rather than a generic code error", async () => {
+  const fixture = await consentFixture();
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => Response.json({ error: "Too many attempts" }, { status: 429 }) }) };
+  const response = await authorize(fixture.request("approve"), fixture.env);
+  assert.equal(response.status, 429);
+  assert.match(await response.text(), /Too many connection attempts/);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+});
+
+test("OAuth distinguishes broken pairing storage from incorrect user codes", async () => {
+  const fixture = await consentFixture();
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => { throw new Error("Registry unavailable"); } }) };
+  const response = await authorize(fixture.request("approve"), fixture.env);
+  assert.equal(response.status, 503);
+  assert.match(await response.text(), /Unable to complete authorization/);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+});
+
+test("draft-only OAuth does not report an unavailable quota backend as a rate limit", async () => {
+  const fixture = await consentFixture();
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => Response.json({ error: "Service unavailable" }, { status: 503 }) }) };
+  const response = await authorize(fixture.request("draft"), fixture.env);
+  assert.equal(response.status, 503);
+  assert.match(await response.text(), /Unable to complete authorization/);
   assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
 });
 

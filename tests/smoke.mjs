@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { setTimeout as pause } from "node:timers/promises";
 import WebSocket from "ws";
+import { createHash, randomBytes } from "node:crypto";
 
 const port = 8799;
 const base = "http://127.0.0.1:" + port;
@@ -153,6 +154,96 @@ async function main() {
     assert.notEqual(ws.readyState, WebSocket.OPEN, "replaced WebSocket must stop accepting messages");
     assert.equal(replacement.readyState, WebSocket.OPEN);
     assert.equal(replacement.protocol, "tsumu-editor");
+    // Exercise OAuth browser consent and PKCE token exchange against the
+    // locally running Worker, not just mocked helper methods.
+    const callbackUri = "http://127.0.0.1:8798/oauth/callback";
+    const registered = await fetch(base + "/oauth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Tsumu connection smoke test",
+        redirect_uris: [callbackUri],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+    });
+    assert.equal(registered.ok, true, await registered.clone().text());
+    const client = await registered.json();
+    assert.ok(client.client_id);
+
+    const verifier = randomBytes(48).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const authorizeUrl = new URL(base + "/authorize");
+    for (const [key, value] of Object.entries({
+      client_id: client.client_id,
+      redirect_uri: callbackUri,
+      response_type: "code",
+      scope: "tsumu:access",
+      state: "smoke-state",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      resource: "https://mcp.tsumu.ebii.net/mcp",
+    })) authorizeUrl.searchParams.set(key, value);
+
+    const consent = await fetch(authorizeUrl, { redirect: "manual" });
+    assert.equal(consent.status, 200, await consent.clone().text());
+    assert.match(consent.headers.get("content-security-policy") || "", /form-action/);
+    const cookie = consent.headers.get("set-cookie")?.split(";")[0];
+    const consentHtml = await consent.text();
+    const handle = /name='handle' value='([^']+)'/.exec(consentHtml)?.[1];
+    assert.ok(handle && cookie, "OAuth consent must include a bound handle and cookie");
+
+    const approved = await fetch(base + "/authorize", {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        handle, decision: "approve", code: result.pairingCode, lang: "en",
+      }),
+      redirect: "manual",
+    });
+    assert.equal(approved.status, 302, await approved.clone().text());
+    const redirect = new URL(approved.headers.get("location"));
+    assert.equal(redirect.origin + redirect.pathname, callbackUri);
+    assert.equal(redirect.searchParams.get("state"), "smoke-state");
+    const authCode = redirect.searchParams.get("code");
+    assert.ok(authCode, "Consent must return a short-lived authorization code");
+
+    const tokenResponse = await fetch(base + "/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: authCode,
+        redirect_uri: callbackUri,
+        client_id: client.client_id,
+        code_verifier: verifier,
+        resource: "https://mcp.tsumu.ebii.net/mcp",
+      }),
+    });
+    assert.equal(tokenResponse.status, 200, await tokenResponse.clone().text());
+    const tokens = await tokenResponse.json();
+    assert.ok(tokens.access_token, "OAuth must issue an MCP access token");
+
+    // This local Worker is accessed at 127.0.0.1, whereas the OAuth
+    // protected resource is the production HTTPS origin. A token minted for
+    // the real resource must not be accepted on a different audience.
+    const localAudience = await fetch(base + "/mcp", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + tokens.access_token,
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 42, method: "tools/list",
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    assert.equal(localAudience.status, 401);
+    assert.match(await localAudience.text(), /Token audience does not match resource server/);
+
     const revoked = await fetch(base + "/bridge/revoke", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: selfHostedOrigin },
@@ -163,7 +254,7 @@ async function main() {
     ws.terminate();
     replacement?.terminate();
   }
-  console.log("Worker HTTP, CORS, pairing, WebSocket replacement and revocation smoke test passed");
+  console.log("Worker HTTP, CORS, pairing, OAuth consent/token, audience isolation and WebSocket smoke test passed");
 }
 
 try {

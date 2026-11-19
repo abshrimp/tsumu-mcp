@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bridgeRequest } from "../src/bridge.js";
+import { bridgeRequest, redeemPairing } from "../src/bridge.js";
 
 const origin = "https://editor.example";
 const sessionId = "f293ab06-ab4b-446c-b8eb-70ac949eb6c6";
@@ -53,4 +53,41 @@ test("revocation accepts a string session ID and JSON with case-insensitive type
   const response = await bridgeRequest(request("revoke", credentials, "Application/JSON; charset=UTF-8"), env);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true });
+});
+
+
+test("a failed browser claim restores its still-valid pairing code", async () => {
+  const calls = [];
+  const sessionId = "12345678-1234-4234-8234-123456789abc";
+  const expiresAt = Date.now() + 5 * 60_000;
+  const env = {
+    PAIRINGS: {
+      getByName: () => ({ fetch: async (url, init) => {
+        const path = new URL(url).pathname;
+        calls.push(path);
+        const input = JSON.parse(init.body);
+        assert.match(input.hash, /^[a-f0-9]{64}$/);
+        if (path === "/take") return Response.json({ sessionId, expiresAt });
+        if (path === "/restore") {
+          assert.deepEqual(Object.keys(input).sort(), ["expiresAt", "hash", "sessionId"]);
+          assert.equal(input.sessionId, sessionId);
+          assert.equal(input.expiresAt, expiresAt);
+          return Response.json({ restored: true });
+        }
+        assert.fail("Unexpected registry operation " + path);
+      } }),
+    },
+    BROWSER_SESSIONS: {
+      getByName: (id) => {
+        assert.equal(id, sessionId);
+        return { fetch: async () => {
+          calls.push("/claim");
+          return Response.json({ error: "Browser offline" }, { status: 410 });
+        } };
+      },
+    },
+  };
+  await assert.rejects(redeemPairing(env, "ABCDEFGHJKLMNPQRSTUV", "127.0.0.1"),
+    /browser is not connected/);
+  assert.deepEqual(calls, ["/take", "/claim", "/restore"]);
 });

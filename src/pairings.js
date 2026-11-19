@@ -50,11 +50,30 @@ export class PairingRegistry extends DurableObject {
         const entry = await txn.get(key);
         if (!entry || entry.expiresAt <= now) return { error: "Invalid or expired code", status: 400 };
         await txn.delete(key);
-        return { sessionId: entry.sessionId, status: 200 };
+        return { sessionId: entry.sessionId, expiresAt: entry.expiresAt, status: 200 };
       });
       await this.scheduleCleanup();
       if (result.status !== 200) return Response.json({ error: result.error }, { status: result.status });
-      return Response.json({ sessionId: result.sessionId });
+      return Response.json({ sessionId: result.sessionId, expiresAt: result.expiresAt });
+    }
+    if (url.pathname === "/restore") {
+      // A consumed code can be restored only when claiming its browser fails.
+      // Keep its original expiry: a retry must never extend the 10-minute window.
+      const { hash, sessionId, expiresAt } = data;
+      const now = Date.now();
+      if (!/^[a-f0-9]{64}$/.test(hash) || !/^[0-9a-f-]{36}$/.test(sessionId) ||
+          !Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + TTL_MS) {
+        return Response.json({ error: "Invalid pairing" }, { status: 400 });
+      }
+      const restored = await this.ctx.storage.transaction(async txn => {
+        const key = "code:" + hash;
+        const existing = await txn.get(key);
+        if (existing && existing.expiresAt > Date.now()) return false;
+        await txn.put(key, { sessionId, expiresAt });
+        return true;
+      });
+      await this.scheduleCleanup();
+      return Response.json({ restored }, { status: restored ? 200 : 409 });
     }
     return new Response(null, { status: 404 });
   }

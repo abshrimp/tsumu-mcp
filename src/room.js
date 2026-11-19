@@ -3,7 +3,7 @@ import { writeFingerprint, cachedWriteResult } from "./write-fingerprint.js";
 import { DurableObject } from "cloudflare:workers";
 import { sha256 } from "./pair-code.js";
 
-const MAX_REQUEST_BYTES = 128 * 1024;
+const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
 const RESULT_TTL_MS = 10 * 60_000;
 
@@ -64,7 +64,13 @@ export class BrowserSession extends DurableObject {
 
     if (path === "/claim") {
       const session = await this.session();
-      if (!this.active(session) || session.claimed || !this.ctx.getWebSockets().length) {
+      // Only the authenticated, currently active editor socket may be claimed.
+      // Replaced or half-closed sockets must not consume an OAuth pairing code.
+      const connected = this.ctx.getWebSockets().some(socket =>
+        socket.readyState === WebSocket.OPEN &&
+        socket.deserializeAttachment()?.connectionId === session?.connectionId
+      );
+      if (!this.active(session) || session.claimed || !connected) {
         return json({ error: "This Tsumu session is unavailable or already paired" }, 410);
       }
       session.claimed = true;
@@ -174,7 +180,7 @@ export class BrowserSession extends DurableObject {
   }
 
   async webSocketMessage(socket, data) {
-    if (typeof data !== "string" || data.length > 1024 * 1024) return;
+    if (typeof data !== "string" || data.length > 4 * 1024 * 1024) return;
     const session = await this.session();
     if (!this.active(session) || socket.deserializeAttachment()?.connectionId !== session.connectionId) return;
     let message;

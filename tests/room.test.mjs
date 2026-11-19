@@ -77,3 +77,54 @@ test("malformed WebSocket response values are ignored", async () => {
     await assert.doesNotReject(room.webSocketMessage(socket, value), value);
   }
 });
+
+
+test("OAuth pairing requires the current live editor socket", async () => {
+  const { storage, sockets, room } = await sessionFixture();
+  const session = await storage.get("session");
+  await storage.put("session", { ...session, claimed: false });
+  const claim = () => room.fetch(new Request("https://internal/claim", {
+    method: "POST", body: "{}",
+  }));
+
+  // A replaced socket can still be present during its closing handshake.
+  sockets.push({
+    readyState: WebSocket.OPEN,
+    deserializeAttachment: () => ({ connectionId: "replaced-connection" }),
+  });
+  assert.equal((await claim()).status, 410);
+  assert.equal((await storage.get("session")).claimed, false);
+
+  sockets.push({
+    readyState: WebSocket.CLOSING,
+    deserializeAttachment: () => ({ connectionId: "connection-1" }),
+  });
+  assert.equal((await claim()).status, 410, "a closing socket must not authorize a code");
+
+  sockets.push({
+    readyState: WebSocket.OPEN,
+    deserializeAttachment: () => ({ connectionId: "connection-1" }),
+  });
+  assert.equal((await claim()).status, 200);
+  assert.equal((await storage.get("session")).claimed, true);
+  assert.equal((await claim()).status, 410, "pairing remains single-use");
+});
+
+test("large, schema-valid edits reach the browser bridge instead of failing at 128 KiB", async () => {
+  const { room } = await sessionFixture();
+  const response = await room.fetch(new Request("https://internal/call", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "apply_operations",
+      args: {
+        requestId: "large-edit-00001",
+        pageId: "home",
+        expectedRevision: "0".repeat(64),
+        operations: [{ op: "set_text", id: "heading", text: "x".repeat(180000) }],
+      },
+    }),
+  }));
+  // No browser is attached to this fixture, but the request is accepted.
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /disconnected/i);
+});

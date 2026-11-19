@@ -1,7 +1,8 @@
 import { brand } from "./consent-page.js";
 import { guideMessages } from "./guide-locales.js";
 import { guideStyles } from "./guide-style.js";
-import { PLUGIN_CLIENTS, pluginIconPath, pluginLinks, safePluginUrl } from "./guide-links.js";
+import { GUIDE_MODE, PLUGIN_CLIENTS, pluginIconPath, pluginLinks, safePluginUrl } from "./guide-links.js";
+import { MCP_URL, manualGuideMessages } from "./manual-guide-locales.js";
 
 const TSUMU_URL = "https://tsumu.ebii.net";
 const REPO_URL = "https://github.com/abshrimp/tsumu-mcp";
@@ -11,10 +12,23 @@ const escapeHtml = value => String(value).replace(/[&<>"']/g, char => "&#" + cha
 // Pixel sizes of the screenshots in public/guide/<locale>/ (captured at 2x).
 // width/height attributes reserve space so the page doesn't shift while loading.
 const SHOTS = {
-  ja: { menu: [1280, 520], modal: [1032, 1052], connected: [1032, 1382], "consent-new": [1016, 1052], "consent-code": [1016, 1490], import: [960, 600] },
-  en: { menu: [1280, 520], modal: [1032, 1024], connected: [1032, 1342], "consent-new": [1016, 1052], "consent-code": [1016, 1490], import: [960, 600] },
+  ja: { menu: [1280, 520], modal: [1080, 884], connected: [1080, 1060], "consent-new": [1016, 1052], "consent-code": [1016, 1490], import: [960, 600] },
+  en: { menu: [1280, 520], modal: [1080, 860], connected: [1080, 1032], "consent-new": [1016, 1052], "consent-code": [1016, 1490], import: [960, 600] },
 };
 const NARROW_SHOTS = new Set(["modal", "connected", "consent-new", "consent-code"]);
+
+// Screenshots of each AI app for the manual-setup guide, in public/guide/apps/.
+// "all" is one image for both languages (<name>.webp); "ja"/"en" are per
+// language (<name>-<locale>.webp). A step whose image isn't listed here is
+// shown without one, so a screenshot appears as soon as it is added.
+const APP_SHOTS = {};
+
+function appShot(name, locale) {
+  const entry = APP_SHOTS[name];
+  if (!entry) return null;
+  if (entry.all) return { src: "/guide/apps/" + name + ".webp", size: entry.all };
+  return entry[locale] ? { src: "/guide/apps/" + name + "-" + locale + ".webp", size: entry[locale] } : null;
+}
 
 const appIcon = (id, size) => "<img src='" + pluginIconPath(id) + "' width='" + size + "' height='" + size + "' alt=''>";
 
@@ -40,14 +54,49 @@ function clientCard(t, client) {
     escapeHtml(t[client.id + "Summary"]) + "</span></div>" + action + "</article>";
 }
 
+const figureHtml = (src, size, alt, narrow) =>
+  "<figure><img class='shot" + (narrow ? " shot-narrow" : "") + "' src='" + src + "' width='" + size[0] + "' height='" + size[1] +
+  "' alt='" + escapeHtml(alt) + "' loading='lazy' decoding='async'></figure>";
+
+const codeHtml = code => "<pre class='code'><code>" + escapeHtml(code) + "</code></pre>";
+
+function stepHtml(item, figure) {
+  return "<li class='step" + (figure ? "" : " no-image") + "'><div><h4>" + escapeHtml(item.title) + "</h4><p>" +
+    escapeHtml(item.body) + "</p>" + (item.code ? codeHtml(item.code) : "") + "</div>" + figure + "</li>";
+}
+
 function step(locale, item) {
   const size = item.image && SHOTS[locale][item.image];
-  const figure = size
-    ? "<figure><img class='shot" + (NARROW_SHOTS.has(item.image) ? " shot-narrow" : "") + "' src='/guide/" + locale + "/" + item.image +
-      ".webp' width='" + size[0] + "' height='" + size[1] + "' alt='" + escapeHtml(item.alt) + "' loading='lazy' decoding='async'></figure>"
-    : "";
-  return "<li class='step" + (figure ? "" : " no-image") + "'><div><h4>" + escapeHtml(item.title) + "</h4><p>" +
-    escapeHtml(item.body) + "</p></div>" + figure + "</li>";
+  return stepHtml(item, size ? figureHtml("/guide/" + locale + "/" + item.image + ".webp", size, item.alt, NARROW_SHOTS.has(item.image)) : "");
+}
+
+function appStep(locale, item) {
+  const shot = item.image && appShot(item.image, locale);
+  return stepHtml(item, shot ? figureHtml(shot.src, shot.size, item.alt, false) : "");
+}
+
+/** Plugin mode: one card per app with a link to its published plugin. */
+function pluginAppsSection(t) {
+  return "<section class='block' id='apps' aria-labelledby='apps-title'><h2 id='apps-title'>" + escapeHtml(t.appsTitle) + "</h2>" +
+    "<p class='section-lead'>" + escapeHtml(t.appsLead) + "</p><div class='apps'>" +
+    PLUGIN_CLIENTS.map(client => clientCard(t, client)).join("") + "</div></section>";
+}
+
+/** Manual mode: the MCP server URL, then step-by-step setup for each app. */
+function manualAppsSection(locale, m) {
+  return "<section class='block' id='apps' aria-labelledby='apps-title'><h2 id='apps-title'>" + escapeHtml(m.appsTitle) + "</h2>" +
+    "<p class='section-lead'>" + escapeHtml(m.appsLead) + "</p>" +
+    "<div class='url-box'><span class='url-label'>" + escapeHtml(m.urlLabel) + "</span>" + codeHtml(MCP_URL) +
+      "<span class='url-help'>" + escapeHtml(m.urlHelp) + "</span></div>" +
+    "<ul class='app-jump'>" + PLUGIN_CLIENTS.map(client => "<li><a href='#app-" + client.id + "'>" + appIcon(client.id, 20) +
+      "<span>" + escapeHtml(client.name) + "</span></a></li>").join("") + "</ul>" +
+    PLUGIN_CLIENTS.map(client => {
+      const c = m.clients[client.id];
+      return "<article class='client' id='app-" + client.id + "' aria-labelledby='app-" + client.id + "-title'>" +
+        "<header class='client-head'><span class='app-icon' aria-hidden='true'>" + appIcon(client.id, 28) + "</span>" +
+        "<div class='app-name'><h3 id='app-" + client.id + "-title'>" + escapeHtml(client.name) + "</h3><span>" + escapeHtml(c.summary) + "</span></div></header>" +
+        "<ol class='steps'>" + c.steps.map(item => appStep(locale, item)).join("") + "</ol></article>";
+    }).join("") + "</section>";
 }
 
 function flow(locale, id, title, items, note) {
@@ -62,15 +111,17 @@ function languageLinks(locale) {
       " lang='" + lang + "' hreflang='" + lang + "'>" + (lang === "ja" ? "日本語" : "English") + "</a>").join("") + "</nav>";
 }
 
-export function guidePage(locale) {
+export function guidePage(locale, mode = GUIDE_MODE) {
   const t = guideMessages[locale] ?? guideMessages.en;
+  const manual = mode === "manual" ? manualGuideMessages[locale] ?? manualGuideMessages.en : null;
+  const trouble = manual ? [manual.firstTrouble, ...t.trouble.slice(1)] : t.trouble;
   const body =
     "<a class='skip' href='#content'>" + escapeHtml(t.skip) + "</a>" +
     "<header class='top'><div class='top-inner'><a class='brand' href='/'>" + brand + "<span>Tsumu</span></a>" +
       languageLinks(locale) + "</div></header>" +
     "<main id='content'>" +
       "<section class='hero'><div><p class='eyebrow'>" + escapeHtml(t.eyebrow) + "</p><h1>" + escapeHtml(t.title) + "</h1>" +
-        "<p class='lead'>" + escapeHtml(t.lead) + "</p><div class='actions'>" +
+        "<p class='lead'>" + escapeHtml(manual ? manual.lead : t.lead) + "</p><div class='actions'>" +
         "<a class='btn btn-primary' href='#apps'>" + escapeHtml(t.tocApps) + "</a>" +
         "<a class='btn' href='" + TSUMU_URL + "'>" + escapeHtml(t.openTsumu) + "</a>" +
         "<a class='btn' href='" + REPO_URL + "'>" + icons.github + escapeHtml(t.viewSource) + "</a></div></div>" +
@@ -80,9 +131,7 @@ export function guidePage(locale) {
       "<nav aria-label='" + escapeHtml(t.tocLabel) + "'><ul class='toc'>" +
         [["apps", t.tocApps], ["new-site", t.tocNew], ["edit-site", t.tocEdit], ["trouble", t.tocTrouble]]
           .map(([id, label]) => "<li><a href='#" + id + "'>" + escapeHtml(label) + "</a></li>").join("") + "</ul></nav>" +
-      "<section class='block' id='apps' aria-labelledby='apps-title'><h2 id='apps-title'>" + escapeHtml(t.appsTitle) + "</h2>" +
-        "<p class='section-lead'>" + escapeHtml(t.appsLead) + "</p><div class='apps'>" +
-        PLUGIN_CLIENTS.map(client => clientCard(t, client)).join("") + "</div></section>" +
+      (manual ? manualAppsSection(locale, manual) : pluginAppsSection(t)) +
       "<section class='block' id='choose' aria-labelledby='choose-title'><h2 id='choose-title'>" + escapeHtml(t.chooseTitle) + "</h2>" +
         "<p class='section-lead'>" + escapeHtml(t.chooseLead) + "</p><div class='choices'>" +
         "<a class='choice' href='#new-site'><span class='tag'>" + escapeHtml(t.recommendedFirst) + "</span><h3>" + escapeHtml(t.newCardTitle) + "</h3>" +
@@ -92,7 +141,7 @@ export function guidePage(locale) {
         flow(locale, "new-site", t.newTitle, t.newSteps, t.newNote) +
         flow(locale, "edit-site", t.editTitle, t.editSteps, t.editNote) + "</section>" +
       "<section class='block' id='trouble' aria-labelledby='trouble-title'><h2 id='trouble-title'>" + escapeHtml(t.troubleTitle) + "</h2>" +
-        "<div class='faq'>" + t.trouble.map(([q, a]) => "<details><summary>" + escapeHtml(q) + "</summary><p>" + escapeHtml(a) + "</p></details>").join("") + "</div></section>" +
+        "<div class='faq'>" + trouble.map(([q, a]) => "<details><summary>" + escapeHtml(q) + "</summary><p>" + escapeHtml(a) + "</p></details>").join("") + "</div></section>" +
       "<section class='block' aria-labelledby='security-title'><h2 id='security-title'>" + escapeHtml(t.securityTitle) + "</h2>" +
         "<ul class='safety'>" + t.security.map(item => "<li>" + escapeHtml(item) + "</li>").join("") + "</ul></section>" +
     "</main>" +
@@ -117,8 +166,8 @@ export function guidePage(locale) {
 export const guideCsp = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
-export function guideResponse(locale, method = "GET") {
-  return new Response(method === "HEAD" ? null : guidePage(locale), {
+export function guideResponse(locale, method = "GET", mode = GUIDE_MODE) {
+  return new Response(method === "HEAD" ? null : guidePage(locale, mode), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "public, max-age=300",

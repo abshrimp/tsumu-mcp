@@ -100,6 +100,20 @@ h3 { margin: 0; font-size: 18px; line-height: 1.45; font-weight: 650; }
 .safety { margin: 0; padding: 18px 22px 18px 40px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-l); color: var(--text-2); }
 .safety li + li { margin-top: 6px; }
 
+.url-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 18px; padding: 16px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-l); }
+.url-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.url-box .code { flex: 1 1 320px; margin: 0; }
+.url-help { flex-basis: 100%; font-size: 13px; color: var(--text-3); }
+.code { margin: 12px 0 0; padding: 10px 14px; overflow-x: auto; background: var(--field); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; user-select: all; -webkit-user-select: all; }
+.app-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+.app-jump a { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); color: var(--text-2); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.app-jump a:hover { border-color: #a8c7fa; color: var(--accent); }
+.app-jump img { display: block; width: 20px; height: 20px; }
+.client { margin-top: 20px; padding: 24px 28px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; }
+.client-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.client-head h3 { font-size: 20px; }
+.client-head .app-name span { display: block; font-size: 13px; color: var(--text-3); }
+
 footer { border-top: 1px solid var(--border); }
 .foot { max-width: 1040px; margin: 0 auto; padding: 24px 20px 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-3); font-size: 13px; }
 .foot nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
@@ -109,7 +123,7 @@ footer { border-top: 1px solid var(--border); }
 @media (max-width: 820px) {
   .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 36px; }
   .choices { grid-template-columns: 1fr; }
-  .flow { padding: 20px 16px; }
+  .flow, .client { padding: 20px 16px; }
   .step, .step.no-image { grid-template-columns: 36px minmax(0, 1fr); gap: 0 14px; }
   .step figure { grid-column: 2; margin-top: 14px; }
 }

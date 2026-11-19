@@ -6,6 +6,15 @@
  * until then a client shows "Coming soon". The Tsumu editor reads the same
  * list from GET /plugins.json and shows only published plugins.
  */
+/**
+ * Which guide GET / serves.
+ *   "manual"  — step-by-step manual MCP setup for each AI app (used while the
+ *               plugin listings are still under review).
+ *   "plugins" — the plugin guide: one "Get the plugin" button per app.
+ * Switch back to "plugins" once every listing in pluginLinks is set.
+ */
+export const GUIDE_MODE = "manual";
+
 export const pluginLinks = {
   chatgpt: null,
   claude: null,

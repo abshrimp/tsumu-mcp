@@ -66,15 +66,15 @@ export const guideMessages = {
       },
       {
         title: "権限を選んで「接続を開始」を押す",
-        body: "AI に編集もさせる場合は「編集を許可する」をオンにします。オフにすると閲覧だけになります。公開やアセットの削除は、どちらの場合もできません。ダイアログの下から、各AIアプリのプラグインや接続方法も開けます。",
+        body: "AI に編集もさせる場合は「編集を許可する」をオンにします。オフにすると閲覧だけになります。公開やアセットの削除は、どちらの場合もできません。ダイアログの下の「使い方の案内を見る」から、このページを開けます。",
         image: "modal",
-        alt: "「AIと接続（MCP）」ダイアログ。「編集を許可する」のチェックボックス、「接続を開始」ボタン、AIアプリのプラグインへのリンク",
+        alt: "「AIと接続（MCP）」ダイアログ。「編集を許可する」のチェックボックス、「接続を開始」ボタン、使い方の案内へのリンク",
       },
       {
         title: "接続コードを確認する",
         body: "接続コードが表示されます。コードは一度だけ使え、10分で失効します。",
         image: "connected",
-        alt: "接続中のダイアログ。接続コードと、AIアプリのプラグインへのリンクが表示されている",
+        alt: "接続中のダイアログ。接続コードと「コピー」ボタンが表示されている",
       },
       {
         title: "認可画面で接続コードを入力する",
@@ -174,15 +174,15 @@ export const guideMessages = {
       },
       {
         title: "Choose a permission and select \"Start connection\"",
-        body: "Turn on \"Allow editing\" to let the AI make changes; leave it off for read-only access. Publishing and deleting assets are never allowed. The bottom of the dialog links to each AI app's plugin or setup steps.",
+        body: "Turn on \"Allow editing\" to let the AI make changes; leave it off for read-only access. Publishing and deleting assets are never allowed. \"See the connection guide\" at the bottom of the dialog opens this page.",
         image: "modal",
-        alt: "The MCP connection dialog with an \"Allow editing\" checkbox, a \"Start connection\" button and links to AI app plugins",
+        alt: "The MCP connection dialog with an \"Allow editing\" checkbox, a \"Start connection\" button and a link to the connection guide",
       },
       {
         title: "Find the connection code",
         body: "A connection code appears. It works only once and expires after 10 minutes.",
         image: "connected",
-        alt: "The connected dialog showing a connection code and links to AI app plugins",
+        alt: "The connected dialog showing a connection code and a Copy button",
       },
       {
         title: "Enter the code on the authorization page",

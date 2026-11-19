@@ -1,10 +1,6 @@
 ---
 name: tsumu-build-site
-description: Create a NEW editable Tsumu website, landing page, portfolio, or multi-page site from scratch. Use for requests such as "Tsumuでサイトを作って", "Tsumuでホームページを作成して", "build a website in Tsumu", or website creation when Tsumu is the selected builder. Read get_site_doc_spec, stage the complete SiteDoc with stage_site_doc, and provide the exact private importUrl. Do not use for adding pages to an existing site, editing a paired site, or reviewing a design; use tsumu-edit-site or tsumu-best-practices.
-license: MIT
-compatibility: Requires an OAuth-authorized Tsumu MCP connection to https://mcp.tsumu.ebii.net/mcp for SiteDoc staging.
-metadata:
-  author: abshrimp
+description: Create a NEW editable Tsumu website or landing page from scratch, including multi-page, responsive and animated designs, then automatically give the user a one-time Tsumu import link. Not for changes to an existing site.
 ---
 
 # Create a new Tsumu website

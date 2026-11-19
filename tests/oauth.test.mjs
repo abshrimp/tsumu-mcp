@@ -152,3 +152,29 @@ test("consent forms require the page's URL-encoded media type", async () => {
   const response = await authorize(request, {});
   assert.equal(response.status, 415);
 });
+
+test("OpenAI app domain proof is exact and limited to GET and HEAD on the MCP origin", async () => {
+  const proofHook = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      return specifier === "cloudflare:workers"
+        ? { url: "data:text/javascript,export class WorkerEntrypoint {}; export class DurableObject {}", shortCircuit: true }
+        : nextResolve(specifier, context);
+    },
+  });
+  let worker;
+  try { ({ default: worker } = await import("../src/index.js")); }
+  finally { proofHook.deregister(); }
+  const path = "/.well-known/openai-apps-challenge";
+  const get = await worker.fetch(new Request(base + path), {}, {});
+  assert.equal(get.status, 200);
+  assert.equal(get.headers.get("Content-Type"), "text/plain");
+  assert.equal(await get.text(), "IU-4_L-YbSiOtFhVeLwWXsEZ78mE4kI6wJhPe3xTgyI");
+  const head = await worker.fetch(new Request(base + path, { method: "HEAD" }), {}, {});
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get("Content-Type"), "text/plain");
+  assert.equal(head.body, null);
+  for (const [url, method] of [[base + path, "POST"], [base + path + "/", "GET"], ["https://example.org" + path, "GET"]]) {
+    const response = await worker.fetch(new Request(url, { method }), {}, {});
+    assert.equal(response.status, 404);
+  }
+});

@@ -12,8 +12,9 @@ const headers = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
   "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
-function page(content, status = 200) {
-  return new Response("<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Tsumu review sample</title><style>body{font:16px/1.6 system-ui;max-width:640px;margin:48px auto;padding:24px}label,input{display:block}input{margin:4px 0 16px;padding:8px}button{padding:10px}a{overflow-wrap:anywhere}</style><h1>Tsumu review sample</h1>" + content + "</html>", { status, headers });
+// Form documents retain Origin on same-origin POST; sample links remain no-referrer.
+function page(content, status = 200, referrerPolicy = "no-referrer") {
+  return new Response("<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Tsumu review sample</title><style>body{font:16px/1.6 system-ui;max-width:640px;margin:48px auto;padding:24px}label,input{display:block}input{margin:4px 0 16px;padding:8px}button{padding:10px}a{overflow-wrap:anywhere}</style><h1>Tsumu review sample</h1>" + content + "</html>", { status, headers: { ...headers, "Referrer-Policy": referrerPolicy } });
 }
 const login = "<p>Dedicated reviewer access. This login creates only a disposable synthetic sample, not an MCP authorization.</p><form method='post' action='/review'><label>Username<input name='username' autocomplete='username' maxlength='100' required></label><label>Password<input name='password' type='password' autocomplete='current-password' maxlength='256' required></label><button type='submit'>Sign in and prepare sample</button></form>";
 function config(env) {
@@ -49,7 +50,7 @@ async function quota(env, key, limit) {
 export async function reviewPage(request, env) {
   const settings = config(env);
   if (!settings || new URL(request.url).origin !== ORIGIN) return new Response("Not found", { status: 404, headers });
-  if (request.method === "GET") return page(login);
+  if (request.method === "GET") return page(login, 200, "same-origin");
   if (request.method !== "POST") return page("<p>Method not allowed.</p>", 405);
   if (request.headers.get("Origin") !== ORIGIN || request.headers.get("Sec-Fetch-Site") === "cross-site") return page("<p>Same-origin sign-in required.</p>", 403);
   if (request.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase() !== "application/x-www-form-urlencoded") return page("<p>Invalid form.</p>", 415);
@@ -64,13 +65,13 @@ export async function reviewPage(request, env) {
     }
     const form = new URLSearchParams(raw);
     const password = form.get("password") || "";
-    if (!password || password.length > 256) return page("<p>Invalid username or password.</p>" + login, 401);
+    if (!password || password.length > 256) return page("<p>Invalid username or password.</p>" + login, 401, "same-origin");
     const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
     const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", iterations: 100000, salt: settings.salt }, key, 256));
     const actual = Array.from(bits, b => b.toString(16).padStart(2, "0")).join("");
     const validPassword = equal(actual, settings.hash);
     const validUsername = equal(await sha256(form.get("username") || ""), await sha256(settings.username));
-    if (!validPassword || !validUsername) return page("<p>Invalid username or password.</p>" + login, 401);
+    if (!validPassword || !validUsername) return page("<p>Invalid username or password.</p>" + login, 401, "same-origin");
     const sample = await stageSiteDoc({ ...env, PAIRINGS: { getByName: () => env.PAIRINGS.getByName("review-drafts") } }, "review-synthetic-fixture", reviewFixture());
     return page("<p>Signed in. A fresh synthetic sample is ready. It expires in one hour and can be imported once.</p><p><a href='" + escape(sample.importUrl) + "' target='_blank' rel='noopener noreferrer'>Open sample site</a></p><ol><li>Use a fresh browser profile with no existing Tsumu sites or hosting accounts. Open the sample in that profile. This creates a separate browser-local site.</li><li>Keep the editor tab open. In AI connection (MCP), enable editing and generate a normal temporary connection code.</li><li>Return to the ChatGPT connection flow and enter that code on Tsumu's normal consent page. This reviewer login is not the connection code.</li><li>List pages, read Home, then add a page with heading Welcome to Tsumu. Inspect the result in the editor.</li><li>Do not connect a hosting account, publish, or delete. Close the review profile when finished.</li></ol><p>For another clean sample, return here and sign in again. No real user sites are included. Keep the sample link private.</p>");
   } catch {

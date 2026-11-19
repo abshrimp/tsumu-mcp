@@ -16,7 +16,13 @@ const ISSUER = "https://mcp.tsumu.ebii.net";
 
 const defaultHandler = {
   async fetch(request, env) {
-    const pathname = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    if (url.origin === ISSUER && pathname === "/.well-known/openai-apps-challenge" && (request.method === "GET" || request.method === "HEAD")) {
+      return new Response(request.method === "HEAD" ? null : "IU-4_L-YbSiOtFhVeLwWXsEZ78mE4kI6wJhPe3xTgyI", {
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
     if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
       // ?lang=ja|en wins; otherwise the browser's Accept-Language decides (English by default).
       return guideResponse(consentLocale(request), request.method);

@@ -1,0 +1,43 @@
+name: Synchronize Tsumu SiteDoc validator
+
+on:
+  push:
+    branches: [fix/use-authoritative-tsumu-site-doc-validator]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.ref == 'refs/heads/fix/use-authoritative-tsumu-site-doc-validator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/use-authoritative-tsumu-site-doc-validator
+          persist-credentials: true
+      - uses: actions/checkout@v7
+        with:
+          repository: abshrimp/tsumu
+          ref: dc616e4caf7493b1bb5b060774001539851ad230
+          path: .tsumu-source
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+      - name: Install pinned Tsumu build dependencies
+        run: npm ci --prefix .tsumu-source --ignore-scripts --no-audit --no-fund
+      - name: Bundle the authoritative importer
+        run: node scripts/build-tsumu-site-doc-validator.mjs
+      - name: Commit reproducible generated validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/generated/tsumu-site-doc-validator.mjs
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build: synchronize canonical Tsumu SiteDoc validator"
+          git push origin HEAD:fix/use-authoritative-tsumu-site-doc-validator

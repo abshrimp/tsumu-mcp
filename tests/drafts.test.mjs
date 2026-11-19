@@ -113,7 +113,9 @@ test("staging rejects invalid tree, references and assets before allocating a dr
     doc.nodes.node_hero.children.push("node_heading");
   })), /nodes\.node_hero\.children/);
   assert.throws(() => checkStagedSiteDoc(changed(doc => {
-    doc.nodes.node_heading.children.push("node_hero");
+    const base = doc.nodes.node_heading;
+    doc.nodes.cycle_a = { ...base, id: "cycle_a", children: ["cycle_b"] };
+    doc.nodes.cycle_b = { ...base, id: "cycle_b", children: ["cycle_a"] };
   })), /cyclic element hierarchy/);
   assert.throws(() => checkStagedSiteDoc(changed(doc => {
     doc.nodes.node_heading.image = { src: "", alt: "", width: 200, height: 100, assetId: "missing" };

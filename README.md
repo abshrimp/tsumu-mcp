@@ -62,10 +62,6 @@ Claude Code and Cursor plugin installations can use the `skills/` directory dire
 The MCP endpoint also publishes the **same** skills via the official `io.modelcontextprotocol/skills` extension:
 `skills/list`, `skills/get`, and verified `skill://` resources. Ordinary MCP tools are available independently of the Skills Extension.
 
-Each Skill includes task-specific discovery guidance, license and MCP environment metadata in `SKILL.md`.
-Its `agents/openai.yaml` provides OpenAI-specific UI labels, an example invocation prompt and MCP dependencies where required.
-Automatic selection depends on the AI client loading the Skill; exposing `skills/list` alone does not guarantee selection.
-
 Skills are bundled for Cloudflare Workers by `npm run generate:skills`; CI checks that the generated bundle
 matches the source. Edit `skills/*/SKILL.md` and its text files under `skills/*/references/`;
 `src/generated-skills.js` is generated. All reference documents are available through `resources/read`.

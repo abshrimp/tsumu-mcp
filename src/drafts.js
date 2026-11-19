@@ -2,6 +2,7 @@ import { readLimitedText } from "./request-body.js";
 import { allowedBrowserOrigin } from "./origin.js";
 import { sha256 } from "./pair-code.js";
 import { checkStagedSiteDoc } from "./site-doc-check.js";
+import { validateTsumuSiteDoc } from "./generated/tsumu-site-doc-validator.mjs";
 import { MAX_DRAFT_BYTES } from "./draft-limits.js";
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -21,9 +22,15 @@ function editorOrigin(value) {
 
 /** Used by OAuth-authenticated MCP calls and the credential-gated fixed review fixture. */
 export async function stageSiteDoc(env, sessionId, doc, chosenEditorOrigin) {
-  // Reject unsupported AI-generated node/style shapes before using draft quota.
-  // Full structural and security validation is repeated by the editor on import.
+  // Authoring diagnostics supplement, but never replace, the authoritative importer.
+  // Both the MCP stage and Tsumu import use the same compiled validation source.
   checkStagedSiteDoc(doc);
+  try {
+    validateTsumuSiteDoc(doc);
+  } catch (cause) {
+    throw new Error("Invalid SiteDoc (Tsumu importer): " +
+      (cause instanceof Error ? cause.message : "The document is invalid"));
+  }
   const editor = editorOrigin(chosenEditorOrigin);
   const serialized = JSON.stringify(doc);
   const bytes = new TextEncoder().encode(serialized);

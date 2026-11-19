@@ -173,7 +173,7 @@ test("MCP Skills Extension lists bundled instructions and returns canonical skil
     });
     assert.equal(config.response.status, 200, config.body);
     assert.match(config.message?.result?.contents?.[0]?.text, /allow_implicit_invocation: true/);
-    assert.match(config.message?.result?.contents?.[0]?.text, /default_prompt:.*\\$tsumu-/);
+    assert.match(config.message?.result?.contents?.[0]?.text, /default_prompt:.*\$tsumu-/);
   }
   const skill = await rpc("skills/get", { uri });
   assert.equal(skill.response.status, 200, skill.body);

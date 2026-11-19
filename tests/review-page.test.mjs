@@ -28,7 +28,7 @@ test("login page does not stage a fixture or expose configured values", async ()
   const s = setup(); const r = await reviewPage(new Request(origin + "/review"), s.env); const html = await r.text();
   assert.equal(r.status, 200); assert.equal(s.calls.length, 0); assert.equal(s.docs.length, 0);
   assert.ok(!html.includes(password)); assert.ok(!html.includes(s.env.REVIEW_PASSWORD_HASH));
-  assert.equal(r.headers.get("cache-control"), "no-store"); assert.equal(r.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(r.headers.get("cache-control"), "no-store"); assert.equal(r.headers.get("referrer-policy"), "same-origin");
 });
 test("reject cross-origin and oversized posts before work", async () => {
   const s = setup(); assert.equal((await reviewPage(post(undefined, undefined, { Origin: "https://other.example" }), s.env)).status, 403);
@@ -45,6 +45,7 @@ test("quota fails closed and never uses forwarded IP", async () => {
 test("successful login prepares only fixed fresh fixture, fragment link, no cookie or OAuth grant", async () => {
   const s = setup(); const r = await reviewPage(post(), s.env); const html = await r.text();
   assert.equal(r.status, 200); assert.equal(r.headers.get("set-cookie"), null);
+  assert.equal(r.headers.get("referrer-policy"), "no-referrer");
   assert.ok(html.includes("https://tsumu.ebii.net/#tsumu-import=")); assert.ok(html.includes("noopener noreferrer"));
   assert.ok(!html.includes(password)); assert.ok(!html.includes("access_token"));
   assert.deepEqual(s.docs, [reviewFixture()]); checkStagedSiteDoc(s.docs[0]);
@@ -63,4 +64,24 @@ test("IP rejection does not spend global quota, and untrusted forwarded IP is ig
   const r = await reviewPage(post(undefined, undefined, { "X-Forwarded-For": "untrusted" }), s.env);
   assert.equal(r.status, 429); assert.deepEqual(keys, [{ requester: await sha256("review-ip:unknown"), limit: 3 }]);
   assert.equal(reviewFixture().nodes.node_heading.text.content, "Tsumu Review Home");
+});
+
+test("login retries keep same-origin policy for every invalid credential form", async () => {
+  for (const [user, pass] of [["wrong", password], ["review-test", "wrong"], ["review-test", ""], ["review-test", "x".repeat(257)]]) {
+    const s = setup(); const r = await reviewPage(post(user, pass), s.env);
+    assert.equal(r.status, 401); assert.equal(r.headers.get("referrer-policy"), "same-origin");
+    assert.equal(r.headers.get("cache-control"), "no-store");
+    assert.ok((await r.text()).includes("<form method='post' action='/review'>"));
+    assert.equal(s.docs.length, 0);
+    assert.equal((await reviewPage(post(), s.env)).status, 200);
+  }
+});
+test("missing, null, foreign Origin and cross-site posts remain rejected before work", async () => {
+  for (const extra of [{ Origin: "null" }, { Origin: "https://other.example" }, { "Sec-Fetch-Site": "cross-site" }, null]) {
+    const s = setup(); const request = post(undefined, undefined, extra || {});
+    if (extra === null) request.headers.delete("Origin");
+    const r = await reviewPage(request, s.env);
+    assert.equal(r.status, 403); assert.equal(r.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(s.calls.length, 0); assert.equal(s.docs.length, 0);
+  }
 });

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Review a Tsumu Site"
-  short_description: "Audit design, accessibility, and implementation quality"
-  default_prompt: "Use $tsumu-best-practices to review this Tsumu website and suggest actionable improvements."
-policy:
-  allow_implicit_invocation: true

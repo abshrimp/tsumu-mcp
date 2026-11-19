@@ -1,50 +1,54 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tsumu-mcp",
-  "main": "src/index.js",
-  "minify": true,
-  "compatibility_date": "2026-11-18",
-  "compatibility_flags": [
-    "global_fetch_strictly_public"
-  ],
-  "workers_dev": true,
-  "assets": {
-    "directory": "./public"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "OAUTH_KV",
-      "id": "248253bdb09d4d679c02580ddbed368b"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "BROWSER_SESSIONS",
-        "class_name": "BrowserSession"
-      },
-      {
-        "name": "PAIRINGS",
-        "class_name": "PairingRegistry"
-      },
-      {
-        "name": "IMPORT_DRAFTS",
-        "class_name": "ImportDraft"
-      }
-    ]
-  },
-  "exports": {
-    "BrowserSession": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    },
-    "PairingRegistry": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    },
-    "ImportDraft": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    }
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tsumu-mcp",
+	"main": "src/index.js",
+	"minify": true,
+	"compatibility_date": "2026-11-18",
+	"compatibility_flags": [
+		"global_fetch_strictly_public"
+	],
+	"workers_dev": true,
+	"assets": {
+		"directory": "./public"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "248253bdb09d4d679c02580ddbed368b"
+		},
+		{
+			"binding": "OAUTH_KV_PREVIEW",
+			"id": "fa62a33b6a1e4155908338819094e8cd"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "BROWSER_SESSIONS",
+				"class_name": "BrowserSession"
+			},
+			{
+				"name": "PAIRINGS",
+				"class_name": "PairingRegistry"
+			},
+			{
+				"name": "IMPORT_DRAFTS",
+				"class_name": "ImportDraft"
+			}
+		]
+	},
+	"exports": {
+		"BrowserSession": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		},
+		"PairingRegistry": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		},
+		"ImportDraft": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
+	}
 }

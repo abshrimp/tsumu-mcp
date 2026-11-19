@@ -29,3 +29,22 @@ jobs:
       - run: npm test
       - run: npm run smoke
       - run: npm run build
+
+  authoritative-site-doc-validator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: abshrimp/tsumu
+          ref: dc616e4caf7493b1bb5b060774001539851ad230
+          path: .tsumu-source
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+      - run: npm ci --prefix .tsumu-source --ignore-scripts --no-audit --no-fund
+      - run: node scripts/build-tsumu-site-doc-validator.mjs --check

@@ -1,0 +1,46 @@
+name: Check upstream Tsumu validation contract
+
+on:
+  schedule:
+    - cron: '12 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: abshrimp/tsumu
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect changes to the actual importer validation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=dc616e4caf7493b1bb5b060774001539851ad230
+          git cat-file -e "$PIN^{commit}"
+          if ! git diff --quiet "$PIN" HEAD -- \
+            lib/site-import-format.ts \
+            lib/doc-tree.ts \
+            lib/document-id.ts \
+            lib/document-validation.ts \
+            lib/document-value-shapes.ts \
+            lib/imported-svg.ts \
+            lib/css-escape.ts \
+            lib/media-url.ts \
+            lib/zip-references.ts; then
+            echo "::error::The Tsumu importer changed after the pinned MCP validator revision."
+            echo "::error::Update the pinned SHA in scripts/build-tsumu-site-doc-validator.mjs and CI, regenerate the vendor module, and review the parity tests."
+            git diff --stat "$PIN" HEAD -- \
+              lib/site-import-format.ts lib/doc-tree.ts lib/document-id.ts \
+              lib/document-validation.ts lib/document-value-shapes.ts \
+              lib/imported-svg.ts lib/css-escape.ts lib/media-url.ts lib/zip-references.ts
+            exit 1
+          fi
+          echo "Tsumu importer validation has not changed since the pinned revision."

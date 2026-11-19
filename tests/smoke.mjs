@@ -168,7 +168,7 @@ async function main() {
         token_endpoint_auth_method: "none",
       }),
     });
-    assert.equal(registered.ok, true, await registered.text());
+    assert.equal(registered.ok, true, await registered.clone().text());
     const client = await registered.json();
     assert.ok(client.client_id);
 
@@ -187,7 +187,7 @@ async function main() {
     })) authorizeUrl.searchParams.set(key, value);
 
     const consent = await fetch(authorizeUrl, { redirect: "manual" });
-    assert.equal(consent.status, 200, await consent.text());
+    assert.equal(consent.status, 200, await consent.clone().text());
     assert.match(consent.headers.get("content-security-policy") || "", /form-action/);
     const cookie = consent.headers.get("set-cookie")?.split(";")[0];
     const consentHtml = await consent.text();
@@ -202,7 +202,7 @@ async function main() {
       }),
       redirect: "manual",
     });
-    assert.equal(approved.status, 302, await approved.text());
+    assert.equal(approved.status, 302, await approved.clone().text());
     const redirect = new URL(approved.headers.get("location"));
     assert.equal(redirect.origin + redirect.pathname, callbackUri);
     assert.equal(redirect.searchParams.get("state"), "smoke-state");
@@ -221,7 +221,7 @@ async function main() {
         resource: "https://mcp.tsumu.ebii.net/mcp",
       }),
     });
-    assert.equal(tokenResponse.status, 200, await tokenResponse.text());
+    assert.equal(tokenResponse.status, 200, await tokenResponse.clone().text());
     const tokens = await tokenResponse.json();
     assert.ok(tokens.access_token, "OAuth must issue an MCP access token");
 
@@ -248,7 +248,7 @@ async function main() {
       }),
       signal: AbortSignal.timeout(10000),
     });
-    assert.equal(call.status, 200, await call.text());
+    assert.equal(call.status, 200, await call.clone().text());
     assert.match(await call.text(), /Demo site/, "OAuth token must authorize a live browser tool call");
 
     const revoked = await fetch(base + "/bridge/revoke", {

@@ -42,14 +42,11 @@ function checkStyles(styles, at) {
 }
 function checkComplexity(input) {
   const stack = [{ value: input, depth: 0 }];
-  const seen = new WeakSet();
   let visited = 0;
   while (stack.length) {
     const { value, depth } = stack.pop();
     if (++visited > 400000 || depth > 80) invalid("document", "document exceeds depth or complexity limits");
     if (!value || typeof value !== "object") continue;
-    if (seen.has(value)) invalid("document", "repeated or cyclic object reference");
-    seen.add(value);
     const entries = Object.entries(value);
     for (const [key, item] of entries) {
       if (!Array.isArray(value) && BAD_KEYS.has(key)) invalid(key, "unsafe property name");

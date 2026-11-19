@@ -1,0 +1,13 @@
+{
+  "name": "tsumu-plugins",
+  "owner": {
+    "name": "abshrimp"
+  },
+  "plugins": [
+    {
+      "name": "tsumu",
+      "source": "./",
+      "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server."
+    }
+  ]
+}

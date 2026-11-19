@@ -1,0 +1,11 @@
+{
+  "name": "tsumu-mcp",
+  "version": "0.1.0",
+  "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server.",
+  "mcpServers": {
+    "tsumu": {
+      "httpUrl": "https://mcp.tsumu.ebii.net/mcp",
+      "authProviderType": "dynamic_discovery"
+    }
+  }
+}

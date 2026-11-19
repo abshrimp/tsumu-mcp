@@ -1,0 +1,154 @@
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { test } from "node:test";
+
+// The consent helpers use standard Web APIs; only their Worker entrypoint needs
+// a runtime class to load in Node. Keep the provider's validation and KV intact.
+const hook = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "cloudflare:workers") {
+      return { url: "data:text/javascript,export class WorkerEntrypoint {}", shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const { getOAuthApi } = await import("@cloudflare/workers-oauth-provider");
+const { authorize } = await import("../src/oauth.js");
+hook.deregister();
+
+const base = "https://mcp.tsumu.ebii.net";
+const callback = "https://client.example/callback";
+const code = "ABCDE-FGHJK-LMNPQ-RSTUV";
+const sessionId = "12345678-1234-4234-8234-123456789abc";
+
+async function consentFixture() {
+  const storage = new Map();
+  const calls = [];
+  const env = {
+    OAUTH_KV: {
+      async get(key, options) {
+        const stored = storage.get(key);
+        return stored === undefined ? null : options?.type === "json" ? JSON.parse(stored) : stored;
+      },
+      async put(key, value) { storage.set(key, value); },
+      async delete(key) { storage.delete(key); },
+      async list({ prefix }) {
+        return { keys: [...storage.keys()].filter(name => name.startsWith(prefix)).map(name => ({ name })), list_complete: true };
+      },
+    },
+    PAIRINGS: { getByName: () => ({ fetch: async url => {
+      calls.push(new URL(url).pathname);
+      return Response.json({ sessionId });
+    } }) },
+    BROWSER_SESSIONS: { getByName: () => ({ fetch: async url => {
+      calls.push(new URL(url).pathname);
+      return Response.json({ siteId: "test" });
+    } }) },
+  };
+  const oauth = getOAuthApi({
+    apiRoute: "/mcp", apiHandler: { fetch() {} }, defaultHandler: { fetch() {} },
+    authorizeEndpoint: "/authorize", tokenEndpoint: "/oauth/token",
+    scopesSupported: ["tsumu:access"],
+    resourceMetadata: { resource: base + "/mcp", authorization_servers: [base] },
+  }, env);
+  env.OAUTH_PROVIDER = oauth;
+  const client = await oauth.createClient({ redirectUris: [callback], tokenEndpointAuthMethod: "none" });
+  const query = new URLSearchParams({
+    client_id: client.clientId, redirect_uri: callback, response_type: "code",
+    scope: "tsumu:access", state: "client-state", code_challenge: "a".repeat(43), code_challenge_method: "S256",
+  });
+  const authRequest = await oauth.parseAuthRequest(new Request(base + "/authorize?" + query));
+  const consent = await oauth.beginConsent(authRequest);
+  const cookie = consent.headers.get("Set-Cookie").split(";")[0];
+  const request = (decision = "draft", cookieValue = cookie, fields = {}) => new Request(base + "/authorize", {
+    method: "POST", headers: { Cookie: cookieValue },
+    body: new URLSearchParams({ handle: consent.handle, lang: "en", decision, code, ...fields }),
+  });
+  return { env, calls, request, storage };
+}
+
+test("unbound consent cannot consume a pairing code or draft quota", async () => {
+  for (const decision of ["approve", "draft"]) {
+    for (const cookie of ["", "__Host-oauth-consent-wrong=wrong"]) {
+      const fixture = await consentFixture();
+      const response = await authorize(fixture.request(decision, cookie), fixture.env);
+      assert.equal(response.status, 400);
+      assert.match(await response.text(), /authorization request is invalid or has expired/);
+      assert.deepEqual(fixture.calls, [], decision);
+    }
+  }
+});
+
+test("expired consent cannot consume a pairing code or draft quota", async () => {
+  for (const decision of ["approve", "draft"]) {
+    const fixture = await consentFixture();
+    for (const key of fixture.storage.keys()) if (key.startsWith("transaction:")) fixture.storage.delete(key);
+    const response = await authorize(fixture.request(decision), fixture.env);
+    assert.equal(response.status, 400);
+    assert.deepEqual(fixture.calls, [], decision);
+  }
+});
+
+test("validated consent issues one authorization and does not repeat side effects on replay", async () => {
+  for (const decision of ["approve", "draft"]) {
+    const fixture = await consentFixture();
+    const response = await authorize(fixture.request(decision), fixture.env);
+    assert.equal(response.status, 302, await response.text());
+    const redirect = new URL(response.headers.get("Location"));
+    assert.equal(redirect.origin + redirect.pathname, callback);
+    assert.equal(redirect.searchParams.get("state"), "client-state");
+    assert.ok(redirect.searchParams.get("code"));
+    assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+    const expected = decision === "approve" ? ["/take", "/claim"] : ["/quota"];
+    assert.deepEqual(fixture.calls, expected);
+    const replay = await authorize(fixture.request(decision), fixture.env);
+    assert.equal(replay.status, 400);
+    assert.deepEqual(fixture.calls, expected, "replayed consent must not mutate pairing state");
+  }
+});
+
+test("invalid code syntax can be corrected before consuming consent", async () => {
+  const fixture = await consentFixture();
+  const invalid = await authorize(fixture.request("approve", undefined, { code: "invalid" }), fixture.env);
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(fixture.calls, []);
+  const valid = await authorize(fixture.request("approve"), fixture.env);
+  assert.equal(valid.status, 302, await valid.text());
+});
+
+test("quota rejection clears the consumed consent cookie", async () => {
+  const fixture = await consentFixture();
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => new Response(null, { status: 429 }) }) };
+  const response = await authorize(fixture.request(), fixture.env);
+  assert.equal(response.status, 429);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+});
+
+test("pairing failure clears the consumed consent cookie", async () => {
+  const fixture = await consentFixture();
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async () => Response.json({ error: "Invalid or expired pairing code" }, { status: 404 }) }) };
+  const response = await authorize(fixture.request("approve"), fixture.env);
+  assert.equal(response.status, 400);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+});
+
+test("oversized consent forms are rejected before OAuth or pairing access", async () => {
+  for (const declaredLength of [undefined, "5000"]) {
+    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    if (declaredLength) headers["Content-Length"] = declaredLength;
+    const request = new Request(base + "/authorize", {
+      method: "POST", headers, body: "decision=draft&handle=" + "x".repeat(5000),
+    });
+    const response = await authorize(request, {});
+    assert.equal(response.status, 413);
+  }
+});
+
+test("consent forms require the page's URL-encoded media type", async () => {
+  const request = new Request(base + "/authorize", {
+    method: "POST", headers: { "Content-Type": "text/plain" }, body: "decision=draft&handle=untrusted",
+  });
+  const response = await authorize(request, {});
+  assert.equal(response.status, 415);
+});

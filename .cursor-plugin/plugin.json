@@ -1,0 +1,20 @@
+{
+  "name": "tsumu",
+  "version": "0.1.0",
+  "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server.",
+  "author": {
+    "name": "abshrimp",
+    "url": "https://github.com/abshrimp"
+  },
+  "homepage": "https://tsumu.ebii.net",
+  "repository": "https://github.com/abshrimp/tsumu-mcp",
+  "license": "MIT",
+  "keywords": [
+    "web design",
+    "website builder",
+    "MCP",
+    "no-code"
+  ],
+  "logo": "assets/tsumu.svg",
+  "mcpServers": "mcp.json"
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tsumu": {
+      "type": "http",
+      "url": "https://mcp.tsumu.ebii.net/mcp"
+    }
+  }
+}

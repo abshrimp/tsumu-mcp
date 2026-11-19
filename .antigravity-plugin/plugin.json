@@ -1,0 +1,20 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "tsumu",
+  "displayName": "Tsumu",
+  "version": "0.1.0",
+  "description": "Create and edit Tsumu websites through a secure browser-paired remote MCP server.",
+  "logo": "assets/tsumu.svg",
+  "suggestedPrompts": [
+    "List the pages in the Tsumu site I have paired.",
+    "Build a responsive landing page in my connected Tsumu site.",
+    "Create a new page in my connected Tsumu site and add a heading."
+  ],
+  "author": {
+    "name": "abshrimp",
+    "url": "https://github.com/abshrimp"
+  },
+  "homepage": "https://tsumu.ebii.net",
+  "repository": "https://github.com/abshrimp/tsumu-mcp",
+  "license": "MIT"
+}

@@ -1,6 +1,10 @@
 ---
 name: tsumu-edit-site
-description: Change, redesign, or add pages and elements in an EXISTING Tsumu website using the paired browser editor, with revision checks and verified saves. Not for creating a separate new site.
+description: Change, redesign, or add pages and elements to an EXISTING paired Tsumu website. Use for requests such as "このサイトにページを追加して", "Tsumuのページを編集して", or "redesign my Tsumu site". Read the paired site, check revisions, apply edits, and verify saves. Do not use to create a separate new website or to give advice without editing; use tsumu-build-site or tsumu-best-practices instead.
+license: MIT
+compatibility: Requires a paired, connected Tsumu editor tab and the appropriate OAuth permission through https://mcp.tsumu.ebii.net/mcp.
+metadata:
+  author: abshrimp
 ---
 
 # Edit an existing Tsumu website

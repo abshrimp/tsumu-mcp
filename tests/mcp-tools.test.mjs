@@ -119,7 +119,7 @@ test("MCP stages a 12 MiB SiteDoc and rejects larger documents before charging q
   const doc = {
     schemaVersion: 1, siteName: "Large site", assets: {}, pageOrder: ["home"],
     pages: { home: { id: "home", name: "Home", slug: "", title: "Home", description: "", children: ["text"] } },
-    nodes: { text: { id: "text", type: "box", name: "Text", children: [],
+    nodes: { text: { id: "text", type: "box", name: "Text", semantic: "auto", children: [],
       text: { content: "", heading: 0 }, styles: { base: { default: { color: "#123" } } } } },
   };
   doc.nodes.text.text.content = "x".repeat(MAX_DRAFT_BYTES - Buffer.byteLength(JSON.stringify(doc)));

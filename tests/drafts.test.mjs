@@ -71,6 +71,70 @@ test("staging rejects silently ignored style fields before allocating storage", 
   }), /have no CSS declarations/);
 });
 
+
+test("staging rejects invalid semantic and native element settings with precise paths", () => {
+  const original = JSON.parse(skillFiles["tsumu-build-site/references/minimal-site.json"]);
+  const changed = mutate => {
+    const doc = structuredClone(original);
+    mutate(doc);
+    return doc;
+  };
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    delete doc.nodes.node_heading.semantic;
+  })), /nodes\.node_heading\.semantic/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.semantic = "heading";
+  })), /nodes\.node_heading\.semantic/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.image = { src: "/hero.jpg", alt: "Hero", width: "800", height: 600 };
+  })), /nodes\.node_heading\.image/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.link = { kind: "internal" };
+  })), /nodes\.node_heading\.link/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.field = { kind: "input", inputType: "unsupported" };
+  })), /nodes\.node_heading\.field/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.scripts = [{ id: "s1", trigger: "load", steps: [{ id: "bad", kind: "mystery" }] }];
+  })), /nodes\.node_heading\.scripts/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.darkStyles = { base: { default: { color: 123 } } };
+  })), /nodes\.node_heading\.darkStyles\.base\.default\.color/);
+});
+
+test("staging rejects invalid tree, references and assets before allocating a draft", async () => {
+  const original = JSON.parse(skillFiles["tsumu-build-site/references/minimal-site.json"]);
+  const changed = mutate => {
+    const doc = structuredClone(original);
+    mutate(doc);
+    return doc;
+  };
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_hero.children.push("node_heading");
+  })), /nodes\.node_hero\.children/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    const base = doc.nodes.node_heading;
+    doc.nodes.cycle_a = { ...base, id: "cycle_a", children: ["cycle_b"] };
+    doc.nodes.cycle_b = { ...base, id: "cycle_b", children: ["cycle_a"] };
+  })), /cyclic element hierarchy/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.nodes.node_heading.image = { src: "", alt: "", width: 200, height: 100, assetId: "missing" };
+  })), /nodes\.node_heading\.image\.assetId/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.assets.logo = { id: "logo", name: "logo.svg", width: "10", height: 20 };
+  })), /assets\.logo/);
+  assert.throws(() => checkStagedSiteDoc(changed(doc => {
+    doc.pages.page_about = { id: "page_about", name: "About", slug: "about", title: "About", description: "", children: ["node_hero"] };
+    doc.pageOrder.push("page_about");
+  })), /multiple parents or pages/);
+  let quotaCalled = false;
+  const env = { PAIRINGS: { getByName() { quotaCalled = true; throw new Error("quota called"); } } };
+  await assert.rejects(stageSiteDoc(env, session, changed(doc => {
+    doc.nodes.node_heading.semantic = null;
+  })), /nodes\.node_heading\.semantic/);
+  assert.equal(quotaCalled, false);
+});
+
 test("browser draft claim and completion require a secret and an allowed Origin", async () => {
   const path = "https://mcp.tsumu.ebii.net/drafts/" + session + "/claim";
   const noOrigin = await importDraftRequest(new Request(path, { method: "POST" }), {});

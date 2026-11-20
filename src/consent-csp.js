@@ -21,6 +21,7 @@ export function consentCsp(redirectUri) {
     ? " https://platform.openai.com"
     : "";
   return "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; " +
+    "frame-src https://tsumu.ebii.net; " +
     "form-action 'self' " + callback.origin + relayOrigin + "; " +
     "frame-ancestors 'none'; base-uri 'none'";
 }

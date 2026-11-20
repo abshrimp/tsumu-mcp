@@ -82,7 +82,7 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
   }, async () => {
     try {
       const invitation = await grantCall(env, grantId, "invite");
-      return textResult({ approvalUrl: "https://tsumu.ebii.net/mcp/choose?invite=" +
+      return textResult({ approvalUrl: "https://tsumu.ebii.net/mcp/choose#invite=" +
         encodeURIComponent(grantId + "." + invitation.ticket), expiresAt: invitation.expiresAt });
     } catch (error) { return textResult(error instanceof Error ? error.message : "Cannot request access", true); }
   });

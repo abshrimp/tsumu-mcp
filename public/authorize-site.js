@@ -1,5 +1,5 @@
 /* Only explicitly selected official sites are authorized. The site directory
- * exposes non-secret metadata, and every selection needs a live browser pairing.
+ * exposes non-secret metadata; each site needs a live, one-time browser pairing.
  */
 (() => {
   const frame = document.getElementById("official-site-directory");
@@ -20,27 +20,34 @@
   const nonce = btoa(String.fromCharCode(...nonceBytes))
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const japanese = document.documentElement.lang === "ja";
+  const originalButtonLabel = approve.textContent;
   const selected = new Map();
-  const pending = new Map();
-  let timer = null;
-  let submitting = false;
+  let queue = null;
+  const completed = new Map();
+  let activeTab = null;
+  let siteTimer = null;
+  let flowTimer = null;
 
-  function message(ja, en) { return japanese ? ja : en; }
+  const message = (ja, en) => japanese ? ja : en;
   function showError(ja, en) {
     errorBox.textContent = message(ja, en);
     errorBox.hidden = false;
   }
-  function resetBusy() {
-    submitting = false;
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
-    pending.clear();
+  function stopFlow() {
+    if (siteTimer !== null) clearTimeout(siteTimer);
+    if (flowTimer !== null) clearTimeout(flowTimer);
+    siteTimer = null;
+    flowTimer = null;
+    queue = null;
+    activeTab = null;
+    completed.clear();
     for (const input of list.querySelectorAll("input")) input.disabled = false;
     allowEdit.disabled = false;
+    approve.textContent = originalButtonLabel;
     approve.disabled = selected.size === 0;
   }
   function renderSites(sites) {
-    if (submitting) return;
+    if (queue) return;
     list.replaceChildren();
     selected.clear();
     const valid = sites.filter(site =>
@@ -81,33 +88,46 @@
     }
   }
 
-  approve.addEventListener("click", () => {
-    if (submitting || selected.size === 0) return;
-    submitting = true;
-    errorBox.hidden = true;
-    approve.disabled = true;
-    allowEdit.disabled = true;
-    for (const input of list.querySelectorAll("input")) input.disabled = true;
-    const entries = [...selected.values()];
-    // Open all tabs during the single user gesture. The browser must keep
-    // each editor's socket open until every one-time code is claimed by OAuth.
-    for (const site of entries) {
-      const edit = allowEdit.checked && site.canEdit ? "1" : "0";
-      const tab = window.open(editorOrigin + "/sites/" + encodeURIComponent(site.id) +
-        "#mcp-select=" + edit, "_blank");
-      if (!tab) {
-        resetBusy();
-        showError("サイトを開けませんでした。ポップアップを許可してください。",
-          "Could not open the selected sites. Allow popups and retry.");
-        return;
-      }
-      pending.set(tab, { siteId: site.id, code: null });
+  function openNextSite() {
+    if (!queue || activeTab) return;
+    const site = queue[completed.size];
+    if (!site) return;
+    const edit = allowEdit.checked && site.canEdit ? "1" : "0";
+    const tab = window.open(editorOrigin + "/sites/" + encodeURIComponent(site.id) +
+      "#mcp-select=" + edit, "_blank");
+    if (!tab) {
+      showError("サイトを開けませんでした。ポップアップを許可してください。",
+        "Could not open the site. Allow popups and retry.");
+      approve.disabled = false;
+      return;
     }
-    timer = setTimeout(() => {
-      resetBusy();
-      showError("サイトへの接続を確認できませんでした。各エディターを確認してください。",
-        "Could not connect all sites. Check the editor tabs and retry.");
+    activeTab = { window: tab, siteId: site.id };
+    approve.disabled = true;
+    siteTimer = setTimeout(() => {
+      siteTimer = null;
+      activeTab = null;
+      showError("サイトへの接続を確認できませんでした。エディターを確認してください。",
+        "Could not connect the site. Check its editor and retry.");
+      approve.disabled = false;
     }, 90_000);
+  }
+
+  approve.addEventListener("click", () => {
+    if (!queue) {
+      if (selected.size === 0) return;
+      queue = [...selected.values()];
+      for (const input of list.querySelectorAll("input")) input.disabled = true;
+      allowEdit.disabled = true;
+      // Each popup requires its own user gesture in modern browsers.
+      // Keep the first editor's socket alive while the next site is approved.
+      flowTimer = setTimeout(() => {
+        stopFlow();
+        showError("接続の有効期限が切れました。もう一度選択してください。",
+          "Site connection codes expired. Restart the selection.");
+      }, 8 * 60_000);
+    }
+    errorBox.hidden = true;
+    openNextSite();
   });
 
   window.addEventListener("message", event => {
@@ -118,32 +138,41 @@
       renderSites(event.data.sites);
       return;
     }
-    if (!submitting || event.data?.type !== "tsumu-mcp-site-ready") return;
-    const expected = pending.get(event.source);
-    if (!expected || event.data.siteId !== expected.siteId || expected.code) return;
+    if (!activeTab || event.source !== activeTab.window ||
+        event.data?.type !== "tsumu-mcp-site-ready" ||
+        event.data.siteId !== activeTab.siteId) return;
+    if (siteTimer !== null) clearTimeout(siteTimer);
+    siteTimer = null;
+    const siteId = activeTab.siteId;
+    activeTab = null;
     if (event.data.ok !== true || typeof event.data.code !== "string" ||
         !codePattern.test(event.data.code)) {
-      resetBusy();
       showError("サイトの接続に失敗しました。エディターを確認してください。",
         "A site could not connect. Check its editor tab.");
+      approve.disabled = false;
       return;
     }
-    expected.code = event.data.code;
-    if ([...pending.values()].some(item => !item.code)) return;
-    const codes = [...pending.values()].map(item => item.code);
-    if (new Set(codes).size !== codes.length) {
-      resetBusy();
-      showError("接続コードが重複しています。再接続してください。",
-        "Duplicate connection codes. Please retry.");
+    if ([...completed.values()].includes(event.data.code)) {
+      showError("接続コードが重複しています。もう一度接続してください。",
+        "Duplicate connection code. Please retry.");
+      approve.disabled = false;
       return;
     }
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
-    codesField.value = JSON.stringify(codes);
-    form.requestSubmit();
+    completed.set(siteId, event.data.code);
+    if (completed.size === queue.length) {
+      if (flowTimer !== null) clearTimeout(flowTimer);
+      flowTimer = null;
+      codesField.value = JSON.stringify(queue.map(site => completed.get(site.id)));
+      approve.disabled = true;
+      form.requestSubmit();
+      return;
+    }
+    approve.textContent = message(
+      "次のサイトを接続 (" + (completed.size + 1) + "/" + queue.length + ")",
+      "Connect next site (" + (completed.size + 1) + "/" + queue.length + ")"
+    );
+    approve.disabled = false;
   });
 
-  // The nonce only authenticates a same-origin iframe response, not an
-  // OAuth grant. Never put pairing codes or OAuth credentials in URLs.
   frame.src = editorOrigin + "/mcp/sites-bridge#nonce=" + nonce;
 })();

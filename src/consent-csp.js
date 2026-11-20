@@ -20,7 +20,7 @@ export function consentCsp(redirectUri) {
     callback.pathname === "/connector_platform_oauth_redirect"
     ? " https://platform.openai.com"
     : "";
-  return "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; " +
+  return "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; " +
     "form-action 'self' " + callback.origin + relayOrigin + "; " +
     "frame-ancestors 'none'; base-uri 'none'";
 }

@@ -53,7 +53,7 @@
   function renderSites(sites) {
     list.replaceChildren();
     const valid = sites.filter(site =>
-      site && sitePattern.test(site.id) &&
+      site && typeof site.id === "string" && sitePattern.test(site.id) &&
       typeof site.name === "string" && typeof site.canEdit === "boolean"
     ).slice(0, 200);
     section.hidden = valid.length === 0;

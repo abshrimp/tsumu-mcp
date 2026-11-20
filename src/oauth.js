@@ -27,7 +27,7 @@ export async function authorize(request, env) {
   let locale = consentLocale(request);
   let consentHeaders;
   let pendingBatch = null;
-  let createdGrantId = null;
+  let attemptedGrantId = null;
   try {
     if (request.method === "GET") {
       const authRequest = await oauth.parseAuthRequest(request);
@@ -104,12 +104,12 @@ export async function authorize(request, env) {
         throw new Error("Invalid pairing code");
       }
       userId = crypto.randomUUID();
+      attemptedGrantId = pendingBatch ? userId : null;
       const grant = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/create", {
         method: "POST",
         body: JSON.stringify({ grantId: userId, sites: pairedSites }),
       });
       if (!grant.ok) throw new Error("Unable to register the authorized site");
-      createdGrantId = userId;
       props = { grantId: userId };
     }
     const { redirectTo } = await oauth.completeAuthorization({
@@ -126,14 +126,19 @@ export async function authorize(request, env) {
     return new Response(null, { status: 302, headers: consentHeaders });
   } catch (error) {
     if (pendingBatch) {
-      if (createdGrantId) {
+      // If the grant creation response was lost, it might still have succeeded.
+      // Never make an already-authorized session's codes reusable unless that
+      // potentially created grant has first been removed successfully.
+      let safeToRollback = !attemptedGrantId;
+      if (attemptedGrantId) {
         try {
-          await env.PAIRINGS.getByName("global").fetch("https://internal/grant/abort", {
-            method: "POST", body: JSON.stringify({ grantId: createdGrantId }),
+          const aborted = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/abort", {
+            method: "POST", body: JSON.stringify({ grantId: attemptedGrantId }),
           });
-        } catch { /* The grant still has a bounded idle lifetime. */ }
+          safeToRollback = aborted.ok;
+        } catch { /* Fail closed: do not release possibly authorized sessions. */ }
       }
-      await pendingBatch.rollback();
+      if (safeToRollback) await pendingBatch.rollback();
     }
     if (error instanceof AuthorizationError && error.redirectTo) {
       return Response.redirect(error.redirectTo, 302);

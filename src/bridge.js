@@ -101,7 +101,14 @@ export async function bridgeRequest(request, env) {
         nextResumeHash: await sha256(nextResumeSecret),
         ...(connectToken ? { secretHash: await sha256(connectToken) } : {}) }),
     });
-    if (!result.ok) return bad("Reconnect permission expired, revoked, or unavailable", 403, origin);
+    if (!result.ok) {
+      // A second tab may use the old cookie just after another tab rotated it.
+      // A 409 is retriable; never clear its cookie or mistake it for revocation.
+      return bad(result.status === 409
+        ? "Reconnect credential was rotated; retry with the updated cookie"
+        : "Reconnect permission expired, revoked, or unavailable",
+      result.status === 409 ? 409 : 403, origin);
+    }
     const data = await result.json();
     const headers = { ...cors(origin), "Set-Cookie": await reconnectCookie(origin, siteId, cookie.sessionId, nextResumeSecret) };
     if (!connectToken) return Response.json(data, { headers });

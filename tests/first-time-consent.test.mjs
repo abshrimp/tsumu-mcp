@@ -27,12 +27,11 @@ test("OAuth shows a compact multi-select site panel without the repeated site he
   assert.match(html, /src='\/authorize-site\.js'/);
 });
 
-test("the connection-code section always starts closed, regardless of connection-history cookies", () => {
+test("the connection-code section always starts closed, independent of unrelated cookies", () => {
   const baseline = consentPage(details, "opaque-handle", request(), "ja");
-  for (const cookie of ["", "tsumu_mcp_code_issued=1", "tsumu_mcp_code_issued=0",
-    "other=1; tsumu_mcp_code_issued=1"]) {
+  for (const cookie of ["", "unrelated=1", "other=0", "unrelated=1; other=1"]) {
     const html = consentPage(details, "opaque-handle", request(cookie), "ja");
-    assert.equal(html, baseline, "old history cookies must never change the UI");
+    assert.equal(html, baseline, "unrelated cookies must not change the UI");
     assert.match(html, /<details class='code-option'>/);
     assert.doesNotMatch(html, /class='code-option' open/);
   }

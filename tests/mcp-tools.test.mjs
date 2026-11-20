@@ -4,8 +4,18 @@ import { serveAuthenticatedMcp } from "../src/mcp-handler.js";
 import { MAX_DRAFT_BYTES, MAX_MCP_REQUEST_BYTES } from "../src/draft-limits.js";
 
 const sessionId = "12345678-1234-4123-8123-123456789abc";
-const auth = { auth: { scope: ["tsumu:access"] }, props: { sessionId } };
+const auth = { auth: { scope: ["tsumu:access"] }, props: { grantId: sessionId } };
 const env = {
+  PAIRINGS: { getByName: () => ({ fetch: async (url, init) => {
+    const path = new URL(url).pathname;
+    const args = JSON.parse(init.body);
+    if (path === "/grant/resolve") return Response.json({ sessionId, siteId: "demo" });
+    if (path === "/grant/list") return Response.json({ sites: [{ siteId: "demo", siteName: "Demo", sessionId, canEdit: true }], activeSiteId: "demo" });
+    if (path === "/grant/select") return args.siteId === "demo" ? Response.json({ activeSiteId: "demo" }) :
+      Response.json({ error: "Site not authorized" }, { status: 403 });
+    if (path === "/grant/invite") return Response.json({ ticket: "t".repeat(43), expiresAt: Date.now() + 600000 });
+    return Response.json({ error: "Unexpected grant action" }, { status: 400 });
+  } }) },
   BROWSER_SESSIONS: {
     getByName(id) {
       assert.equal(id, sessionId);
@@ -21,8 +31,8 @@ const env = {
           if (message.action === "apply_operations") {
             return Response.json({ result: { applied: message.args.operations } });
           }
-          if (message.action === "list_sites") {
-            return Response.json({ result: [{ id: "demo", name: "Demo" }] });
+          if (String(_request).endsWith("/info")) {
+            return Response.json({ siteId: "demo", siteName: "Demo", canEdit: true, connected: true });
           }
           return Response.json({ error: "Unexpected action" }, { status: 400 });
         },
@@ -56,7 +66,7 @@ test("authenticated HTTP endpoint advertises typed editing and creation tools", 
   assert.ok(message?.result?.tools, body);
   const tools = message.result.tools;
   assert.deepEqual(tools.map(t => t.name).sort(), [
-    "apply_operations", "create_page", "create_site", "get_element", "get_page", "get_site_doc_spec", "insert_element", "list_pages", "list_sites", "set_style", "set_text", "stage_site_doc",
+    "apply_operations", "create_page", "create_site", "get_element", "get_page", "get_site_doc_spec", "insert_element", "list_pages", "list_sites", "request_site_access", "select_site", "set_style", "set_text", "stage_site_doc",
   ]);
   for (const tool of tools) {
     assert.equal(tool.inputSchema.type, "object");
@@ -190,13 +200,15 @@ test("authenticated MCP tool call reaches the selected browser session", async (
   });
   assert.equal(response.status, 200, body);
   assert.equal(message?.result?.content?.[0]?.type, "text", body);
-  assert.deepEqual(JSON.parse(message.result.content[0].text), [{ id: "demo", name: "Demo" }]);
+  assert.deepEqual(JSON.parse(message.result.content[0].text), { sites: [
+    { id: "demo", name: "Demo", canEdit: true, connected: true, selected: true },
+  ], activeSiteId: "demo" });
 });
 
 test("MCP tool route rejects unauthorized and invalid session contexts", async () => {
   for (const ctx of [
-    { auth: { scope: [] }, props: { sessionId } },
-    { auth: { scope: ["tsumu:access"] }, props: { sessionId: "../danger" } },
+    { auth: { scope: [] }, props: { grantId: sessionId } },
+    { auth: { scope: ["tsumu:access"] }, props: { grantId: "../danger" } },
     { auth: { scope: ["tsumu:access"] }, props: {} },
     {},
   ]) {

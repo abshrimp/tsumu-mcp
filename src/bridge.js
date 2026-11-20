@@ -149,13 +149,17 @@ export async function bridgeRequest(request, env) {
     const byToken = typeof input?.sessionId === "string" && SESSION_ID.test(input.sessionId) &&
       typeof input.connectToken === "string";
     if (!cookie && !byToken) return bad("Invalid session", 400, origin);
-    const sessionId = cookie?.sessionId || input.sessionId;
+    // Prefer an explicitly supplied live-session secret over a cookie from
+    // another tab. An older tab must never revoke the newer tab's session.
+    const sessionId = byToken ? input.sessionId : cookie.sessionId;
     const result = await env.BROWSER_SESSIONS.getByName(sessionId).fetch("https://internal/revoke", {
-      method: "POST", body: JSON.stringify(cookie ? { origin, siteId, resumeHash: await sha256(cookie.secret) } :
-        { connectToken: input.connectToken }),
+      method: "POST", body: JSON.stringify(byToken ? { connectToken: input.connectToken } :
+        { origin, siteId, resumeHash: await sha256(cookie.secret) }),
     });
     const headers = { ...cors(origin), "Content-Type": "application/json" };
-    if (typeof siteId === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(siteId)) {
+    // A stale tab may still send an old session token after another tab has
+    // replaced the cookie. Preserve the newer tab's separate reconnect grant.
+    if (cookie && cookie.sessionId === sessionId) {
       headers["Set-Cookie"] = await clearReconnectCookie(origin, siteId);
     }
     return new Response(result.body, { status: result.status, headers });

@@ -82,7 +82,7 @@ export class BrowserSession extends DurableObject {
       }
       session.claimed = true;
       await this.ctx.storage.put("session", session);
-      return json({ siteName: session.siteName });
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
     }
 
     if (path === "/revoke") {
@@ -101,6 +101,29 @@ export class BrowserSession extends DurableObject {
     }
 
     if (path === "/restore" || path === "/renew") return this.restoreOrRenew(path, input);
+    if (path === "/info") {
+      const session = await this.session();
+      if (!session || session.revoked || !session.claimed || session.persistentUntil <= Date.now()) {
+        return json({ error: "Session no longer authorized" }, 410);
+      }
+      const connected = this.ctx.getWebSockets().some(socket =>
+        socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
+      );
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected });
+    }
+    if (path === "/attach") {
+      const session = await this.session();
+      if (!session || session.revoked || session.persistentUntil <= Date.now() ||
+          !session.connectionId || typeof input.connectToken !== "string" ||
+          await sha256(input.connectToken) !== session.secretHash) return json({ error: "Forbidden" }, 403);
+      const connected = this.ctx.getWebSockets().some(socket =>
+        socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
+      );
+      if (!connected) return json({ error: "Editor is not connected" }, 410);
+      session.claimed = true;
+      await this.ctx.storage.put("session", session);
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
+    }
     if (path === "/call") return this.call(input);
     return json({ error: "Not found" }, 404);
   }

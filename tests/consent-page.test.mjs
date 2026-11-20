@@ -86,8 +86,11 @@ test("new-site consent has an outlined blue button at the same size as regular c
 });
 
 test("expanded connection details stay inside short desktop viewports", () => {
-  assert.ok(consentStyles.includes("max-height: calc(100dvh - 56px); min-height: 0; overflow-y: auto;"));
+  assert.ok(consentStyles.includes("max-height: calc(100dvh - 32px); min-height: 0; overflow: visible;"));
   assert.ok(consentStyles.includes("min-height: 100dvh; max-height: none; overflow: visible;"));
+  assert.ok(consentStyles.includes("max-height: clamp(96px, 23dvh, 220px); overflow-y: auto;"));
+  assert.ok(consentStyles.includes(".official-site-list {"));
+  assert.doesNotMatch(consentStyles, /\.official-sites h2/);
 });
 
 test("language links preserve the OAuth parameters and never reflect unescaped client input", () => {

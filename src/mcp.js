@@ -20,16 +20,46 @@ async function grantCall(env, grantId, action, args = {}) {
   return body;
 }
 
+function editorUrl(status, siteId) {
+  try {
+    const origin = new URL(status?.origin);
+    if ((origin.protocol !== "https:" && origin.protocol !== "http:") ||
+        origin.pathname !== "/" || origin.search || origin.hash) return null;
+    return new URL("/sites/" + encodeURIComponent(siteId), origin).toString();
+  } catch { return null; }
+}
+
+function openEditorInstruction(site, status) {
+  const url = editorUrl(status, site.siteId);
+  const name = JSON.stringify(site.siteName);
+  return "The Tsumu editor for " + name + " is not connected. Ask the user to open " +
+    (url || "the selected site's Tsumu editor") +
+    " in the browser that authorized this site, and retry once it is open. " +
+    "Do not claim that the operation was completed.";
+}
+
 async function execute(env, grantId, action, args = {}) {
   const selected = await grantCall(env, grantId, "resolve");
   const room = env.BROWSER_SESSIONS.getByName(selected.sessionId);
+  const infoResponse = await room.fetch("https://internal/info", {
+    method: "POST", body: "{}",
+  });
+  if (!infoResponse.ok) throw new Error("Selected site's authorization has expired or been revoked. Ask the user to authorize it again.");
+  const info = await infoResponse.json();
+  if (info.siteId !== selected.siteId) throw new Error("Site authorization mismatch");
+  if (!info.connected) throw new Error(openEditorInstruction(selected, info));
   const response = await room.fetch("https://internal/call", {
     method: "POST",
     body: JSON.stringify({ action, args }),
   });
   let body;
   try { body = await response.json(); } catch { throw new Error("Invalid bridge response"); }
-  if (!response.ok) throw new Error(body.error || "Tsumu bridge unavailable");
+  if (!response.ok) {
+    if (response.status === 503 && /disconnected/i.test(body.error || "")) {
+      throw new Error(openEditorInstruction(selected, info));
+    }
+    throw new Error(body.error || "Tsumu bridge unavailable");
+  }
   return body.result;
 }
 
@@ -49,7 +79,7 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
 
   if (!draftOnly) {
   server.registerTool("list_sites", {
-    description: "List only the sites this AI application was explicitly authorized to access, including the active site and whether each editor is online. Other sites are not visible.",
+    description: "List only explicitly authorized sites. If connected is false, ask the user to open the provided openUrl in the browser that authorized the site before trying to read or edit it. Do not attempt to open browser tabs yourself.",
     inputSchema: z.strictObject({}),
     annotations: { title: "List authorized sites", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -64,7 +94,7 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
         if (!status || status.siteId !== site.siteId) return null;
         return { id: site.siteId, siteRef: site.sessionId, name: site.siteName,
           canEdit: site.canEdit && status.canEdit === true,
-          connected: status.connected === true, selected: site.sessionId === grant.activeSiteRef };
+          connected: status.connected === true, openUrl: editorUrl(status, site.siteId), selected: site.sessionId === grant.activeSiteRef };
       }))).filter(Boolean);
       const selected = sites.find(site => site.selected);
       return textResult({
@@ -75,7 +105,7 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
     }
   });
   server.registerTool("select_site", {
-    description: "Select an explicitly authorized site from list_sites. Supply siteId when unique, or siteRef to disambiguate identical IDs on different Tsumu instances. Offline sites cannot be edited until their editor tab is open.",
+    description: "Select an explicitly authorized site from list_sites. Supply siteId when unique, or siteRef to disambiguate identical IDs. If connected is false, ask the user to open openUrl in their browser before editing.",
     inputSchema: z.strictObject({
       siteId: z.string().min(1).max(100).optional(),
       siteRef: z.string().uuid().optional(),
@@ -98,8 +128,13 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
       if (!statusResponse.ok) throw new Error("Site authorization expired or was revoked");
       const status = await statusResponse.json();
       if (status.siteId !== matches[0].siteId) throw new Error("Site authorization does not match");
-      return textResult(await grantCall(env, grantId, "select",
-        siteRef !== undefined ? { siteRef } : { siteId }));
+      const result = await grantCall(env, grantId, "select",
+        siteRef !== undefined ? { siteRef } : { siteId });
+      return textResult({
+        ...result, connected: status.connected === true,
+        openUrl: editorUrl(status, matches[0].siteId),
+        ...(!status.connected ? { instruction: openEditorInstruction(matches[0], status) } : {}),
+      });
     } catch (error) {
       return textResult(error instanceof Error ? error.message : "Cannot select site", true);
     }

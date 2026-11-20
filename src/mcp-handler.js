@@ -9,12 +9,12 @@ import { MAX_MCP_REQUEST_BYTES } from "./draft-limits.js";
  */
 export async function serveAuthenticatedMcp(request, env, ctx) {
   const draftOnly = ctx.props?.draftOnly === true;
-  const sessionId = draftOnly ? ctx.props?.draftGrantId : ctx.props?.sessionId;
-  if (!ctx.auth?.scope?.includes("tsumu:access") || typeof sessionId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(sessionId)) {
+  const grantId = draftOnly ? ctx.props?.draftGrantId : ctx.props?.grantId;
+  if (!ctx.auth?.scope?.includes("tsumu:access") || typeof grantId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(grantId)) {
     return new Response("Forbidden", { status: 403 });
   }
-  const handler = createMcpHandler(() => createServer(env, sessionId, { draftOnly }), {
+  const handler = createMcpHandler(() => createServer(env, grantId, { draftOnly }), {
     maxRequestBodySize: MAX_MCP_REQUEST_BYTES,
   });
   return handler.fetch(request);

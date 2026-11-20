@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { siteGrantsRequest } from "./site-grants.js";
 
 const TTL_MS = 10 * 60_000;
 const ATTEMPT_WINDOW_MS = 5 * 60_000;
@@ -9,6 +10,11 @@ export class PairingRegistry extends DurableObject {
     if (request.method !== "POST") return new Response(null, { status: 405 });
     const url = new URL(request.url);
     const data = await request.json();
+    if (url.pathname.startsWith("/grant/")) {
+      const response = await siteGrantsRequest(this.ctx.storage, url.pathname, data);
+      if (response.ok) await this.scheduleCleanup();
+      return response;
+    }
     if (url.pathname === "/quota") {
       const { requester } = data;
       if (!/^[a-f0-9]{64}$/.test(requester)) return Response.json({ error: "Invalid quota key" }, { status: 400 });
@@ -88,7 +94,7 @@ export class PairingRegistry extends DurableObject {
     const entries = await this.ctx.storage.list();
     let next = Infinity;
     for (const [key, entry] of entries) {
-      if (!/^(code:|rate:|create:)/.test(key)) continue;
+      if (!/^(code:|rate:|create:|grant:|invite:)/.test(key)) continue;
       if (entry?.expiresAt <= Date.now()) await this.ctx.storage.delete(key);
       else if (entry?.expiresAt) next = Math.min(next, entry.expiresAt);
     }

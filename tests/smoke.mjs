@@ -99,7 +99,7 @@ async function main() {
     });
     assert.equal(response.status, 204, origin);
     assert.equal(response.headers.get("access-control-allow-origin"), origin);
-    assert.equal(response.headers.get("access-control-allow-credentials"), null);
+    assert.equal(response.headers.get("access-control-allow-credentials"), "true");
   }
   for (const origin of ["null", "http://evil.example", "https://evil.example/path"]) {
     const response = await fetch(base + "/bridge/sessions", {

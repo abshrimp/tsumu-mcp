@@ -73,8 +73,16 @@ export async function authorize(request, env) {
       props = { draftOnly: true, draftGrantId: userId };
     } else {
       const paired = await redeemPairing(env, code, request.headers.get("CF-Connecting-IP") || "unknown");
-      userId = paired.sessionId;
-      props = { sessionId: paired.sessionId };
+      userId = crypto.randomUUID();
+      const grant = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/create", {
+        method: "POST",
+        body: JSON.stringify({ grantId: userId, sites: [{
+          siteId: paired.siteId, siteName: paired.siteName,
+          sessionId: paired.sessionId, canEdit: paired.canEdit,
+        }] }),
+      });
+      if (!grant.ok) throw new Error("Unable to register the authorized site");
+      props = { grantId: userId };
     }
     const { redirectTo } = await oauth.completeAuthorization({
       request: approved.request,

@@ -2,6 +2,7 @@ import { readLimitedText } from "./request-body.js";
 import { writeFingerprint, cachedWriteResult } from "./write-fingerprint.js";
 import { DurableObject } from "cloudflare:workers";
 import { sha256 } from "./pair-code.js";
+import { ACTIVE_SESSION_MS, RECONNECT_IDLE_MS } from "./bridge-cookie.js";
 
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -47,19 +48,25 @@ export class BrowserSession extends DurableObject {
       if (typeof input.siteId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(input.siteId) ||
           typeof input.siteName !== "string" || !input.siteName.trim() || input.siteName.length > 120 ||
           typeof input.secretHash !== "string" || !/^[a-f0-9]{64}$/.test(input.secretHash) ||
+          typeof input.resumeHash !== "string" || !/^[a-f0-9]{64}$/.test(input.resumeHash) ||
+          typeof input.origin !== "string" || !/^https?:\/\//.test(input.origin) ||
           typeof input.canEdit !== "boolean") return json({ error: "Invalid session" }, 400);
-      const expiresAt = Date.now() + 60 * 60_000;
+      const expiresAt = Date.now() + ACTIVE_SESSION_MS;
+      const persistentUntil = Date.now() + RECONNECT_IDLE_MS;
       await this.ctx.storage.put("session", {
         siteId: input.siteId,
         siteName: input.siteName,
         secretHash: input.secretHash,
+        resumeHash: input.resumeHash,
+        origin: input.origin,
+        persistentUntil,
         canEdit: input.canEdit,
         claimed: false,
         revoked: false,
         expiresAt,
       });
       await this.scheduleCleanup(expiresAt);
-      return json({ ok: true, expiresAt });
+      return json({ ok: true, expiresAt, persistentUntil });
     }
 
     if (path === "/claim") {
@@ -75,14 +82,15 @@ export class BrowserSession extends DurableObject {
       }
       session.claimed = true;
       await this.ctx.storage.put("session", session);
-      return json({ siteName: session.siteName });
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
     }
 
     if (path === "/revoke") {
       const session = await this.session();
-      if (!session || await sha256(String(input.connectToken || "")) !== session.secretHash) {
-        return json({ error: "Forbidden" }, 403);
-      }
+      const byToken = typeof input.connectToken === "string" &&
+        await sha256(input.connectToken) === session?.secretHash;
+      const byCookie = this.validResume(session, input);
+      if (!session || (!byToken && !byCookie)) return json({ error: "Forbidden" }, 403);
       session.revoked = true;
       await this.ctx.storage.put("session", session);
       for (const socket of this.ctx.getWebSockets()) {
@@ -92,12 +100,95 @@ export class BrowserSession extends DurableObject {
       return json({ ok: true });
     }
 
+    if (path === "/restore" || path === "/renew") return this.restoreOrRenew(path, input);
+    if (path === "/info") {
+      const session = await this.session();
+      if (!session || session.revoked || !session.claimed || session.persistentUntil <= Date.now()) {
+        return json({ error: "Session no longer authorized" }, 410);
+      }
+      const connected = this.ctx.getWebSockets().some(socket =>
+        socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
+      );
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected });
+    }
+    if (path === "/attach") {
+      const session = await this.session();
+      if (!session || session.revoked || session.persistentUntil <= Date.now() ||
+          !session.connectionId || typeof input.connectToken !== "string" ||
+          await sha256(input.connectToken) !== session.secretHash) return json({ error: "Forbidden" }, 403);
+      const connected = this.ctx.getWebSockets().some(socket =>
+        socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
+      );
+      if (!connected) return json({ error: "Editor is not connected" }, 410);
+      // The relay verifies the invitation before this operation. Once the
+      // one-time grant addition succeeds the site becomes accessible to AI.
+      session.claimed = true;
+      await this.ctx.storage.put("session", session);
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
+    }
     if (path === "/call") return this.call(input);
     return json({ error: "Not found" }, 404);
   }
 
   active(session) {
-    return !!session && !session.revoked && session.expiresAt > Date.now();
+    return !!session && !session.revoked && session.expiresAt > Date.now() &&
+      session.persistentUntil > Date.now();
+  }
+
+  validResume(session, input) {
+    if (!session || session.revoked || !session.claimed ||
+        session.persistentUntil <= Date.now() ||
+        input?.origin !== session.origin || input?.siteId !== session.siteId ||
+        typeof input?.resumeHash !== "string") return false;
+    return input.resumeHash === session.resumeHash;
+  }
+
+  async restoreOrRenew(path, input) {
+    if (typeof input?.nextResumeHash !== "string" || !/^[a-f0-9]{64}$/.test(input.nextResumeHash) ||
+        (path === "/restore" && (typeof input.secretHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(input.secretHash)))) {
+      return json({ error: "Invalid reconnect request" }, 400);
+    }
+    // Durable Object requests can interleave at storage awaits. Rotate grants
+    // inside one transaction to prevent two simultaneous renewals from both
+    // committing changes based on a stale session snapshot.
+    const outcome = await this.ctx.storage.transaction(async txn => {
+      const session = await txn.get("session");
+      if (!this.validResume(session, input)) {
+        const stale = session && !session.revoked &&
+          session.origin === input?.origin && session.siteId === input?.siteId &&
+          session.persistentUntil > Date.now() &&
+          input?.resumeHash === session.previousResumeHash &&
+          session.previousResumeUntil > Date.now();
+        return { status: stale ? 409 : 403, error: stale
+          ? "Reconnect credential was rotated by another request"
+          : "Reconnect permission expired, revoked, or unavailable" };
+      }
+      const now = Date.now();
+      session.previousResumeHash = session.resumeHash;
+      session.previousResumeUntil = now + 30_000;
+      session.resumeHash = input.nextResumeHash;
+      session.persistentUntil = now + RECONNECT_IDLE_MS;
+      session.expiresAt = now + ACTIVE_SESSION_MS;
+      if (path === "/restore") {
+        session.secretHash = input.secretHash;
+        session.connectionId = null;
+      }
+      await txn.put("session", session);
+      return { session };
+    });
+    if (!outcome.session) return json({ error: outcome.error }, outcome.status);
+    await this.scheduleCleanup(outcome.session.expiresAt);
+    if (path === "/restore") {
+      for (const socket of this.ctx.getWebSockets()) {
+        this.failSocket(socket);
+        socket.close(1000, "Replaced");
+      }
+    }
+    return json({
+      siteId: outcome.session.siteId, canEdit: outcome.session.canEdit,
+      expiresAt: outcome.session.expiresAt, persistentUntil: outcome.session.persistentUntil,
+    });
   }
 
   async connect(request) {
@@ -200,7 +291,9 @@ export class BrowserSession extends DurableObject {
 
   async alarm() {
     const session = await this.session();
-    if (!this.active(session)) {
+    if (!session || session.revoked || session.persistentUntil <= Date.now() ||
+        (!session.claimed && session.expiresAt <= Date.now())) {
+
       for (const socket of this.ctx.getWebSockets()) {
         this.failSocket(socket);
         socket.close(1000, "Session expired");
@@ -209,7 +302,13 @@ export class BrowserSession extends DurableObject {
       return;
     }
     const now = Date.now();
-    let next = session.expiresAt;
+    if (session.expiresAt <= now) {
+      for (const socket of this.ctx.getWebSockets()) {
+        this.failSocket(socket);
+        socket.close(1000, "Session expired");
+      }
+    }
+    let next = session.expiresAt > now ? session.expiresAt : session.persistentUntil;
     for (const [key, value] of await this.ctx.storage.list({ prefix: "result:" })) {
       if (!value?.expiresAt || value.expiresAt <= now) await this.ctx.storage.delete(key);
       else next = Math.min(next, value.expiresAt);

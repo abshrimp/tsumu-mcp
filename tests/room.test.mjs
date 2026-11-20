@@ -14,7 +14,7 @@ async function sessionFixture() {
   await storage.put("session", {
     siteId: "demo", siteName: "Demo", canEdit: true, claimed: true, revoked: false,
     connectionId: "connection-1", secretHash: await sha256("connect-token"),
-    expiresAt: Date.now() + 60_000,
+    expiresAt: Date.now() + 60_000, persistentUntil: Date.now() + 7 * 24 * 60 * 60_000,
   });
   const room = new BrowserSession({ storage, getWebSockets: () => sockets }, {});
   return { storage, sockets, room };

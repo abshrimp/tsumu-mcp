@@ -42,7 +42,7 @@ async function consentFixture() {
     } }) },
     BROWSER_SESSIONS: { getByName: () => ({ fetch: async url => {
       calls.push(new URL(url).pathname);
-      return Response.json({ siteId: "test" });
+      return Response.json({ siteId: "test", siteName: "Test", canEdit: true });
     } }) },
   };
   const oauth = getOAuthApi({
@@ -99,7 +99,7 @@ test("validated consent issues one authorization and does not repeat side effect
     assert.equal(redirect.searchParams.get("state"), "client-state");
     assert.ok(redirect.searchParams.get("code"));
     assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
-    const expected = decision === "approve" ? ["/take", "/claim"] : ["/quota"];
+    const expected = decision === "approve" ? ["/take", "/claim", "/grant/create"] : ["/quota"];
     assert.deepEqual(fixture.calls, expected);
     const replay = await authorize(fixture.request(decision), fixture.env);
     assert.equal(replay.status, 400);

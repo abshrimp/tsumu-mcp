@@ -9,9 +9,10 @@ Use when the user refers to a site already open or paired in Tsumu, asks for a c
 
 ## Select the correct site
 
-1. Call `list_sites` to see the one site authorized for this pairing. Use `list_pages` to identify the target page; never presume access to other sites.
-2. If there is no pairing, the browser tab is disconnected, permission is read-only, or the intended site differs from the paired site, report the limitation and request the relevant connection/permission. **Do not substitute `stage_site_doc` and pretend the original site was updated.**
-3. Use `create_page` only when the request requires a new page **within this paired site**. New site creation is a different task; use `tsumu-build-site` instead.
+1. Call `list_sites` to inspect only explicitly authorized sites, their connection status and permissions. If necessary, call `select_site` before inspecting pages. Use `siteId` for a unique site; when different Tsumu instances share the same ID, use the exact `siteRef` returned by `list_sites`. Then call `list_pages` for the selected site.
+2. If the requested site is missing from the authorized list, use `request_site_access` to produce a short-lived approval link and ask the user to explicitly approve that site. An offline site cannot be edited until its editor is open. Never assume permission or infer additional sites.
+3. If the selected site is read-only, request a new editing permission. **Do not substitute `stage_site_doc` and pretend the original site was updated.**
+4. Use `create_page` only when the request requires a new page **within the selected site**. New site creation is a different task; use `tsumu-build-site` instead.
 
 ## Inspect, change, verify
 

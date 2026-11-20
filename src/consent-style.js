@@ -45,7 +45,18 @@ label { display: block; margin-bottom: 7px; font-weight: 600; font-size: 13px; }
 .draft { background: #fff; color: var(--accent); }
 .approve:hover { background: var(--accent-hover); }
 .draft:hover { background: #edf4ff; }
-.secondary-action { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+.official-sites { margin: 0 0 16px; }
+.official-sites[hidden], #official-site-error[hidden] { display: none; }
+.official-sites h2 { margin: 0 0 12px; font-size: 14px; font-weight: 650; }
+.official-edit { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.official-site-list { display: grid; gap: 8px; }
+.official-site-item { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 50px; padding: 9px 12px; text-align: left; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+.official-site-item:hover { border-color: #8db4ee; background: #f7faff; }
+.official-site-item:disabled { cursor: wait; opacity: .65; }
+.official-site-item strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.official-site-item small { margin-left: 12px; flex: none; font-size: 11px; color: var(--muted); }
+.draft-choice { margin-top: 8px; }
+.code-option { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 .code-option { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 .code-option summary { width: fit-content; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; padding: 8px 0; }
 .code-content { padding-top: 14px; }

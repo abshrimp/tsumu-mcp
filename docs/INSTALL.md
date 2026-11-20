@@ -10,18 +10,15 @@ For an existing site, the browser tab holds the document and authorizes the conn
 
 **For a new site:** Add the MCP endpoint to your AI client and choose **Allow new-site creation only** on the OAuth page. This grant needs no existing Tsumu site, editor tab or connection code. It permits `get_site_doc_spec` and `stage_site_doc`, but cannot list, read or edit an existing site. Open the returned import link to create a new site in the editor; it is not automatically published.
 
-**For an existing site:**
+**For an existing site:** On the OAuth page, choose an official Tsumu site directly from the list (shown only when you have sites), then select its permission. A trusted frame on `tsumu.ebii.net` shares only the non-secret site list with the MCP authorization page; no authentication credentials or documents are copied.
 
-1. Open https://tsumu.ebii.net (or your self-hosted editor) and select the site.
-2. Open the editor's **MCP connection** menu (Japanese: **AIと接続（MCP）**), choose read-only or read/edit, then start the connection.
-3. In the AI client's OAuth window, verify the client name and redirect host, then enter the one-time connection code displayed in Tsumu.
-4. Keep the editor tab open. Sessions expire after one hour; revoke access in Tsumu when finished.
+For **self-hosted editors**, open **AIと接続（MCP）** in the editor, issue a connection code, then expand **Connect a self-hosted Tsumu site** below **Allow new-site creation only** on the OAuth page. Enter the one-time code there.
 
-Each existing-site grant is limited to that paired site. A newly created site must be opened and paired separately before the AI client can edit it. Do not share connection codes or import links.
+Keep the editor tab open while editing. Browser permissions last up to seven days of inactivity, with automatic short-session renewal while connected. Existing-site grants can cover multiple explicitly approved sites: call `list_sites`, `select_site`, or `request_site_access` to add another site. A newly created site never inherits permission automatically.
 
 A screenshot guide for end users (Japanese and English) is served at https://mcp.tsumu.ebii.net/. While the plugin listings are under review it shows the manual setup for each client; `GUIDE_MODE` in `src/guide-links.js` switches it to the plugin-only guide.
 
-The authorization page changes after Tsumu has issued a code in the browser: before that, it leads with **Allow new-site creation only** and keeps the code field under **Have a connection code? Use it here**; afterwards, the code field comes first.
+The connection choices are always in this order: available official sites, **Allow new-site creation only**, then the self-hosted connection code. The official-site section is omitted when there are no accessible sites.
 
 ## Skills and new-site handoff
 

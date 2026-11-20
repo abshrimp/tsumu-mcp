@@ -81,13 +81,30 @@ export function consentPage(details, handle, request, locale) {
     "<button class='approve' type='submit' name='decision' value='approve'>" + escapeHtml(t.approve) + "</button>");
   const draftControls = form("<button class='draft' type='submit' name='decision' value='draft'>" +
     escapeHtml(t.draftOnly) + "</button>");
-  const choices = hasCodeHistory
-    ? codeControls +
-      "<div class='secondary-action'><span>" + escapeHtml(t.draftHelp) + "</span>" +
-      draftControls + "</div>"
-    : draftControls +
-      "<details class='code-option'><summary>" + escapeHtml(t.codeOption) +
-      "</summary><div class='code-content'>" + codeControls + "</div></details>";
+  // Only display this panel once the official editor reports a nonempty
+  // same-origin site directory through a strictly scoped postMessage.
+  const officialControls =
+    "<section id='official-sites' class='official-sites' hidden>" +
+      "<h2>" + escapeHtml(t.chooseOfficial) + "</h2>" +
+      "<label class='official-edit'><input id='official-edit' type='checkbox' checked> " +
+        escapeHtml(t.allowEdit) + "</label>" +
+      "<div id='official-site-list' class='official-site-list' role='group' aria-label='" +
+        escapeHtml(t.chooseOfficial) + "'></div>" +
+      "<p id='official-site-error' class='error' role='alert' hidden></p>" +
+    "</section>" +
+    "<iframe id='official-site-directory' title='Tsumu site directory' hidden " +
+      "referrerpolicy='no-referrer' aria-hidden='true' tabindex='-1'></iframe>" +
+    "<form method='post' action='/authorize' id='official-site-authorization'>" +
+      "<input type='hidden' name='handle' value='" + escapeHtml(handle) + "'>" +
+      "<input type='hidden' name='lang' value='" + locale + "'>" +
+      "<input type='hidden' name='decision' value='approve'>" +
+      "<input type='hidden' name='code' value=''>" +
+    "</form>";
+  const choices = officialControls +
+    "<div class='draft-choice'>" + draftControls + "</div>" +
+    "<details class='code-option'" + (hasCodeHistory ? " open" : "") + "><summary>" +
+      escapeHtml(t.codeOption) + "</summary><div class='code-content'>" +
+      codeControls + "</div></details>";
 
   return layout(locale,
     "<div class='connection'>" +
@@ -102,7 +119,8 @@ export function consentPage(details, handle, request, locale) {
     "<details class='details'><summary>" + escapeHtml(t.details) + "</summary>" +
       "<dl><div><dt>" + escapeHtml(t.redirect) + "</dt><dd>" + escapeHtml(details.redirectHost) + "</dd></div>" +
       "<div><dt>" + escapeHtml(t.scopes) + "</dt><dd><ul class='scopes'>" + scopes + "</ul></dd></div></dl>" +
-      loopback + "<p class='restricted'>" + escapeHtml(t.restricted) + "</p></details>",
+      loopback + "<p class='restricted'>" + escapeHtml(t.restricted) + "</p></details>" +
+    "<script src='/authorize-site.js' defer></script>",
     request);
 }
 

@@ -6,6 +6,9 @@ test("permit a validated ChatGPT OAuth callback after POST /authorize", () => {
   const csp = consentCsp("https://chatgpt.com/connector_platform_oauth_redirect?code=secret&state=secret");
   assert.match(csp, /form-action 'self' https:\/\/chatgpt\.com https:\/\/platform\.openai\.com;/);
   assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /frame-src https:\/\/tsumu\.ebii\.net;/);
+  assert.match(csp, /script-src 'self'/);
+  assert.doesNotMatch(csp, /frame-src[^;]*\*/);
   assert.match(csp, /default-src 'none'/);
   assert.doesNotMatch(csp, /code=secret/);
 });

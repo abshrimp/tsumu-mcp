@@ -103,12 +103,14 @@ To connect a self-hosted Tsumu instance to the public MCP server, build the edit
 
 | Tool | Permission | Action |
 | --- | --- | --- |
-| list_sites | Read | Return the paired site |
-| list_pages | Read | Return page IDs and slugs |
+| list_sites | Read | List active, explicitly authorized sites and their unique `siteRef` values |
+| select_site | Read | Select an authorized site by `siteId` or unique `siteRef` |
+| request_site_access | User approval | Issue a short-lived link for explicitly adding another official site |
+| list_pages | Read | Return page IDs and slugs of the selected site |
 | get_page | Read | Return a page's edit context and SHA-256 revision |
 | get_element | Read | Read a node's text, styles and children |
-| create_site | Edit | Create a browser-stored site; returns a URL and requires pairing the new site separately |
-| create_page | Edit | Create a named page in the paired site |
+| create_site | Edit | Create a browser-stored site; explicit approval is required before editing it via MCP |
+| create_page | Edit | Create a named page in the selected site |
 | apply_operations | Edit | Apply up to 100 strictly typed Tsumu AiOp operations atomically |
 | set_text | Edit | Edit an existing element's text |
 | set_style | Edit | Update an element's CSS properties |
@@ -121,8 +123,8 @@ To connect a self-hosted Tsumu instance to the public MCP server, build the edit
 - For element edits, call `get_page` first, then pass its `revision` as `expectedRevision`.
 - Every paired-site mutation requires a unique `requestId` (8–80 letters, digits, hyphens or underscores). Repeating the **same** request with the same ID returns its cached result when available; changing its action or arguments with the same ID is rejected. Results are retained for ten minutes within an authorized session.
 - `apply_operations` uses a discriminated operation schema. Each entry specifies `op` and its required fields. Unsupported operations and invalid types are rejected before reaching the browser. The `set_text`, `set_style` and `insert_element` tools cover common changes.
-- A new site is created in the local browser's site list and IndexedDB, but does not become part of the original OAuth grant. Open its returned URL in the same browser and pair it separately before editing. `create_site` is unavailable for server-backed Tsumu storage.
-- A new page belongs to the currently paired site, receives an automatically unique URL slug, and can be edited by calling `get_page` using the returned page ID.
+- A newly created site is never automatically added to an OAuth grant. Approve it explicitly using `request_site_access`; `create_site` is unavailable for server-backed Tsumu storage.
+- A new page belongs to the selected site, receives an automatically unique URL slug, and can be edited by calling `get_page` using the returned page ID.
 - Never blindly retry a timed-out write. Read the page or check the Tsumu browser first to establish whether the write succeeded.
 
 ## Security model and limitations
@@ -130,8 +132,8 @@ To connect a self-hosted Tsumu instance to the public MCP server, build the edit
 - A signed-in Tsumu account is not required: the **live browser** authorizes access to the particular site.
 - The remote MCP OAuth server issues scoped access tokens using the official Cloudflare OAuth Provider. A separate random WebSocket token authenticates the browser; it is transmitted via the WebSocket subprotocol, not a URL parameter.
 - Bridge HTTP requests and WebSockets require a valid HTTPS browser Origin (or HTTP loopback for development). The server checks site/session authorization for every operation and denies edits on read-only sessions.
-- One-time codes expire in ten minutes and are consumed atomically; failed pairing attempts are rate limited.
-- When the browser is closed or disconnected, editing is unavailable. Revoked or expired sessions cannot be used with an OAuth token.
+- One-time codes expire in ten minutes and are consumed atomically; failed pairing attempts are rate limited. The reconnect cookie is host-only, HttpOnly and rotated for up to seven days of idle time. Short-lived WebSocket sessions renew while the editor is open.
+- When the browser is closed or disconnected, editing is unavailable until the editor reopens and restores an unexpired grant. Revoked or expired sessions cannot be used with an OAuth token. The OAuth site's authorization lifetime is renewed only by authenticated use, and browser grants are checked before listing or selecting a site.
 - Browser saves are confirmed before an edit is reported as successful. If a site is also synced to Tsumu's server, that existing sync remains asynchronous; MCP does not claim that publication or cloud sync has completed.
 - In production, configure Cloudflare WAF/rate limits for public pairing endpoints, monitor error rates, verify custom-domain OAuth redirects and exercise end-to-end tests with the targeted MCP clients.
 

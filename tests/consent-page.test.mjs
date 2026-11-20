@@ -85,11 +85,14 @@ test("new-site consent has an outlined blue button at the same size as regular c
   assert.ok(consentStyles.includes(".draft:hover { background: #edf4ff; }"));
 });
 
-test("expanded connection details stay inside short desktop viewports", () => {
+test("expanded connection code and details scroll inside the desktop consent card", () => {
   assert.ok(consentStyles.includes("max-height: calc(100dvh - 32px); min-height: 0; overflow: visible;"));
-  assert.ok(consentStyles.includes("min-height: 100dvh; max-height: none; overflow: visible;"));
-  assert.ok(consentStyles.includes("max-height: clamp(96px, 23dvh, 220px); overflow-y: auto;"));
-  assert.ok(consentStyles.includes(".official-site-list {"));
+  assert.match(consentStyles, /\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow-y: auto;/);
+  assert.match(consentStyles, /\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow-y: auto;\s*overscroll-behavior: contain;/);
+  assert.ok(consentStyles.includes("max-height: clamp(96px, 23dvh, 220px); overflow-y: auto;"),
+    "site selection remains independently scrollable while both details panels are closed");
+  assert.match(consentStyles, /@media \(max-width: 520px\)[\s\S]*\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow: visible;/,
+    "mobile layouts must use ordinary page scrolling rather than nested modal scrolling");
   assert.doesNotMatch(consentStyles, /\.official-sites h2/);
 });
 

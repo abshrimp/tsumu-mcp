@@ -40,6 +40,42 @@ export class PairingRegistry extends DurableObject {
       await this.scheduleCleanup();
       return Response.json({ ok: true });
     }
+    if (url.pathname === "/take-many") {
+      const { hashes, requester } = data;
+      if (!Array.isArray(hashes) || hashes.length < 2 || hashes.length > 12 ||
+          hashes.some(hash => typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash)) ||
+          new Set(hashes).size !== hashes.length ||
+          typeof requester !== "string" || !/^[a-f0-9]{64}$/.test(requester)) {
+        return Response.json({ error: "Invalid pairing codes" }, { status: 400 });
+      }
+      const result = await this.ctx.storage.transaction(async txn => {
+        const now = Date.now();
+        const rateKey = "rate:" + requester;
+        const previous = await txn.get(rateKey);
+        const count = previous?.expiresAt > now ? previous.count : 0;
+        if (count + hashes.length > MAX_ATTEMPTS) {
+          return { error: "Too many attempts", status: 429 };
+        }
+        await txn.put(rateKey, { count: count + hashes.length, expiresAt: now + ATTEMPT_WINDOW_MS });
+        const entries = [];
+        for (const hash of hashes) {
+          const entry = await txn.get("code:" + hash);
+          if (!entry || entry.expiresAt <= now) {
+            // No site is consumed if any code in this authorization is invalid.
+            return { error: "Invalid or expired code", status: 400 };
+          }
+          entries.push({ hash, sessionId: entry.sessionId, expiresAt: entry.expiresAt });
+        }
+        if (new Set(entries.map(entry => entry.sessionId)).size !== entries.length) {
+          return { error: "Duplicate site session", status: 400 };
+        }
+        for (const hash of hashes) await txn.delete("code:" + hash);
+        return { entries, status: 200 };
+      });
+      await this.scheduleCleanup();
+      return Response.json(result.status === 200 ? { entries: result.entries } :
+        { error: result.error }, { status: result.status });
+    }
     if (url.pathname === "/take") {
       const { hash, requester } = data;
       if (!/^[a-f0-9]{64}$/.test(hash) || !/^[a-f0-9]{64}$/.test(requester)) {

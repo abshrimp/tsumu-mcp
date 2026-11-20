@@ -141,3 +141,22 @@ test("cookie-only disconnect revokes the matching site and clears its grant", as
   assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
 });
 
+
+test("a failed revocation does not erase the browser's only retry credential", async () => {
+  const cookie = (await reconnectCookie(origin, "demo", sessionId, "x".repeat(43))).split(";")[0];
+  const env = { BROWSER_SESSIONS: {
+    getByName: id => {
+      assert.equal(id, sessionId);
+      return { fetch: async () => Response.json({ error: "Unavailable" }, { status: 503 }) };
+    },
+  } };
+  const request = new Request("https://mcp.example/bridge/revoke", {
+    method: "POST",
+    headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ siteId: "demo" }),
+  });
+  const response = await bridgeRequest(request, env);
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("Set-Cookie"), null,
+    "transient errors must leave the HttpOnly cookie available for a retry");
+});

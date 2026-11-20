@@ -167,6 +167,81 @@ test("one OAuth approval grants exactly the two selected official sites", async 
   }), fixture.env)).status, 400, "the one-time OAuth consent cannot be reused");
 });
 
+test("failed grant creation rolls back all provisional multi-site claims after abort confirmation", async () => {
+  const fixture = await consentFixture();
+  const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  const anotherCode = "BCDEF-GHJKL-MNPQR-STUVW";
+  const calls = [];
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 60_000,
+      })) });
+    }
+    if (path === "/grant/create") return Response.json({ error: "Unavailable" }, { status: 503 });
+    if (path === "/grant/abort") return Response.json({ aborted: true });
+    if (path === "/restore") return Response.json({ restored: true });
+    assert.fail(path);
+  } }) };
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async url => {
+    const path = new URL(url).pathname;
+    calls.push(path + ":" + id);
+    if (path === "/claim") return Response.json({ siteId: id === sessionId ? "a" : "b",
+      siteName: "Site", canEdit: true });
+    if (path === "/release") return Response.json({ released: true });
+    assert.fail(path);
+  } }) };
+  const res = await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, anotherCode]),
+  }), fixture.env);
+  assert.equal(res.status, 503);
+  assert.deepEqual(calls, [
+    "/take-many", "/claim:" + sessionId, "/claim:" + secondSession,
+    "/grant/create", "/grant/abort",
+    "/release:" + sessionId, "/restore",
+    "/release:" + secondSession, "/restore",
+  ]);
+});
+
+test("uncertain grant revocation never restores pairing codes to a second client", async () => {
+  const fixture = await consentFixture();
+  const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  const calls = [];
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 60_000,
+      })) });
+    }
+    if (path === "/grant/create") throw new Error("Grant response lost");
+    if (path === "/grant/abort") throw new Error("Cannot confirm grant removal");
+    assert.fail("Claims must remain consumed when grant deletion is uncertain: " + path);
+  } }) };
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async url => {
+    const path = new URL(url).pathname;
+    calls.push(path + ":" + id);
+    if (path === "/claim") return Response.json({ siteId: id === sessionId ? "a" : "b",
+      siteName: "Site", canEdit: true });
+    assert.fail("A failed abort must not release provisional claims: " + path);
+  } }) };
+  const res = await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, "BCDEF-GHJKL-MNPQR-STUVW"]),
+  }), fixture.env);
+  assert.equal(res.status, 503);
+  assert.deepEqual(calls, [
+    "/take-many", "/claim:" + sessionId, "/claim:" + secondSession,
+    "/grant/create", "/grant/abort",
+  ]);
+});
+
 test("invalid multi-site code arrays fail before OAuth consent or pairing", async () => {
   const cases = [
     "not-json", "[]", JSON.stringify(["bad"]), JSON.stringify([code, code]),

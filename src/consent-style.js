@@ -14,6 +14,13 @@ a { color: var(--accent); }
 :is(a, button, input, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .page { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
 .card { width: min(100%, 468px); max-height: calc(100dvh - 32px); min-height: 0; overflow: visible; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 24px 28px 18px; box-shadow: 0 12px 40px #1629470c; }
+/* Keep the default consent compact. Expanded optional content may exceed the
+   viewport, so let the card scroll only while a details section is open. */
+.card:has(.code-option[open]), .card:has(.details[open]) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 .top, .brand, .languages, .connection, .client-identity { display: flex; align-items: center; }
 .top { justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .brand { gap: 9px; font-size: 15px; }
@@ -83,6 +90,11 @@ label { display: block; margin-bottom: 7px; font-weight: 600; font-size: 13px; }
 @media (max-width: 520px) {
   .page { padding: 0; place-items: start stretch; background: #fff; }
   .card { width: 100%; min-height: 100dvh; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 20px; box-shadow: none; }
+  /* Narrow screens use regular document scrolling rather than an inner modal. */
+  .card:has(.code-option[open]), .card:has(.details[open]) {
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
   .top { margin-bottom: 18px; }
   .connection { gap: 8px; }
   .client-identity { gap: 8px; }

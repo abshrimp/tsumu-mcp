@@ -11,8 +11,18 @@ function textResult(value, isError = false) {
   return { isError, content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] };
 }
 
-async function execute(env, sessionId, action, args = {}) {
-  const room = env.BROWSER_SESSIONS.getByName(sessionId);
+async function grantCall(env, grantId, action, args = {}) {
+  const response = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/" + action, {
+    method: "POST", body: JSON.stringify({ grantId, ...args }),
+  });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Site grant unavailable");
+  return body;
+}
+
+async function execute(env, grantId, action, args = {}) {
+  const selected = await grantCall(env, grantId, "resolve");
+  const room = env.BROWSER_SESSIONS.getByName(selected.sessionId);
   const response = await room.fetch("https://internal/call", {
     method: "POST",
     body: JSON.stringify({ action, args }),
@@ -23,7 +33,7 @@ async function execute(env, sessionId, action, args = {}) {
   return body.result;
 }
 
-export function createServer(env, sessionId, { draftOnly = false } = {}) {
+export function createServer(env, grantId, { draftOnly = false } = {}) {
   const server = new McpServer({ name: "tsumu", version: "0.1.0" });
   skillCatalog.attach(server);
   const tool = (name, title, description, inputSchema, action, transform = args => args) => {
@@ -32,15 +42,50 @@ export function createServer(env, sessionId, { draftOnly = false } = {}) {
     const destructiveHint = ["apply_operations", "set_text", "set_style"].includes(name);
     const annotations = { title, readOnlyHint, destructiveHint, openWorldHint: false };
     server.registerTool(name, { description, inputSchema, annotations }, async (args) => {
-      try { return textResult(await execute(env, sessionId, action, transform(args))); }
+      try { return textResult(await execute(env, grantId, action, transform(args))); }
       catch (error) { return textResult(error instanceof Error ? error.message : "Operation failed", true); }
     });
   };
 
   if (!draftOnly) {
-  tool("list_sites", "List authorized sites",
-    "Returns the one site currently authorized in this browser pairing. Access to a newly created site requires a separate pairing in the same browser.",
-    z.object({}), "list_sites");
+  server.registerTool("list_sites", {
+    description: "List only the sites this AI application was explicitly authorized to access, including the active site and whether each editor is online. Other sites are not visible.",
+    inputSchema: z.strictObject({}),
+    annotations: { title: "List authorized sites", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async () => {
+    try {
+      const grant = await grantCall(env, grantId, "list");
+      const sites = await Promise.all(grant.sites.map(async site => {
+        const room = env.BROWSER_SESSIONS.getByName(site.sessionId);
+        const status = await room.fetch("https://internal/info", { method: "POST", body: "{}" })
+          .then(async res => res.ok ? res.json() : null).catch(() => null);
+        return { id: site.siteId, name: site.siteName, canEdit: site.canEdit,
+          connected: status?.connected === true, selected: site.siteId === grant.activeSiteId };
+      }));
+      return textResult({ sites, activeSiteId: grant.activeSiteId });
+    } catch (error) {
+      return textResult(error instanceof Error ? error.message : "Cannot list sites", true);
+    }
+  });
+  server.registerTool("select_site", {
+    description: "Select a site from list_sites. Only explicitly authorized sites can be selected. This does not grant access to new sites; offline sites cannot be edited until their Tsumu tab is open.",
+    inputSchema: z.strictObject({ siteId: z.string().min(1).max(100) }),
+    annotations: { title: "Select authorized site", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async ({ siteId }) => {
+    try { return textResult(await grantCall(env, grantId, "select", { siteId })); }
+    catch (error) { return textResult(error instanceof Error ? error.message : "Cannot select site", true); }
+  });
+  server.registerTool("request_site_access", {
+    description: "Generate a short-lived approval link so the user can explicitly add another official Tsumu site to the authorized list. Never use this to infer access to unapproved sites. The user must open the link and approve the site in Tsumu.",
+    inputSchema: z.strictObject({}),
+    annotations: { title: "Request access to another site", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async () => {
+    try {
+      const invitation = await grantCall(env, grantId, "invite");
+      return textResult({ approvalUrl: "https://tsumu.ebii.net/mcp/choose?invite=" +
+        encodeURIComponent(grantId + "." + invitation.ticket), expiresAt: invitation.expiresAt });
+    } catch (error) { return textResult(error instanceof Error ? error.message : "Cannot request access", true); }
+  });
   tool("list_pages", "List pages", "Returns pages and IDs of the currently paired site.",
     z.object({}), "list_pages");
   tool("get_page", "Get page",
@@ -104,7 +149,7 @@ export function createServer(env, sessionId, { draftOnly = false } = {}) {
     }),
     annotations: { title: "Stage new site document", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ doc, editorOrigin }) => {
-    try { return textResult(await stageSiteDoc(env, sessionId, doc, editorOrigin)); }
+    try { return textResult(await stageSiteDoc(env, grantId, doc, editorOrigin)); }
     catch (error) { return textResult(error instanceof Error ? error.message : "Unable to stage site", true); }
   });
   return server;

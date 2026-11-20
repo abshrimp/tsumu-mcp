@@ -70,54 +70,47 @@ export class BrowserSession extends DurableObject {
     }
 
     if (path === "/claim") {
-      const session = await this.session();
-      // Only the authenticated, currently active editor socket may be claimed.
-      // Replaced or half-closed sockets must not consume an OAuth pairing code.
-      const connected = this.ctx.getWebSockets().some(socket =>
-        socket.readyState === WebSocket.OPEN &&
-        socket.deserializeAttachment()?.connectionId === session?.connectionId
-      );
-      if (!this.active(session) || session.claimed || !connected) {
-        return json({ error: "This Tsumu session is unavailable or already paired" }, 410);
-      }
       if (input.claimId !== undefined &&
           (typeof input.claimId !== "string" ||
            !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId))) {
         return json({ error: "Invalid claim ID" }, 400);
       }
-      session.claimed = true;
-      // Only an in-flight multi-site approval can undo this provisional claim.
-      // Ordinary single-site approvals cannot be released by the batch API.
-      if (input.claimId) session.pendingClaimId = input.claimId;
-      await this.ctx.storage.put("session", session);
-      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
+      // Browser claims and provisional release/confirmation must serialize.
+      // Two OAuth requests cannot both claim a session that was unclaimed.
+      const result = await this.ctx.storage.transaction(async txn => {
+        const session = await txn.get("session");
+        const connected = this.ctx.getWebSockets().some(socket =>
+          socket.readyState === WebSocket.OPEN &&
+          socket.deserializeAttachment()?.connectionId === session?.connectionId
+        );
+        if (!this.active(session) || session.claimed || !connected) return null;
+        session.claimed = true;
+        if (input.claimId) session.pendingClaimId = input.claimId;
+        await txn.put("session", session);
+        return { siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit };
+      });
+      return result ? json(result) :
+        json({ error: "This Tsumu session is unavailable or already paired" }, 410);
     }
 
-    if (path === "/release") {
-      const session = await this.session();
-      if (!session ||
-          typeof input.claimId !== "string" ||
+    if (path === "/release" || path === "/confirm-claim") {
+      if (typeof input.claimId !== "string" ||
           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId)) {
         return json({ error: "Invalid provisional claim" }, 400);
       }
-      if (!session.claimed) return json({ released: false });
-      if (session.pendingClaimId !== input.claimId) {
-        return json({ error: "Claim belongs to another authorization" }, 403);
-      }
-      session.claimed = false;
-      delete session.pendingClaimId;
-      await this.ctx.storage.put("session", session);
-      return json({ released: true });
-    }
-
-    if (path === "/confirm-claim") {
-      const session = await this.session();
-      if (!session || !session.claimed || session.pendingClaimId !== input.claimId) {
-        return json({ error: "Provisional claim unavailable" }, 409);
-      }
-      delete session.pendingClaimId;
-      await this.ctx.storage.put("session", session);
-      return json({ confirmed: true });
+      const outcome = await this.ctx.storage.transaction(async txn => {
+        const session = await txn.get("session");
+        if (!session) return { status: 410, error: "Session unavailable" };
+        if (path === "/release" && !session.claimed) return { released: false };
+        if (!session.claimed || session.pendingClaimId !== input.claimId) {
+          return { status: 403, error: "Claim belongs to another authorization" };
+        }
+        if (path === "/release") session.claimed = false;
+        delete session.pendingClaimId;
+        await txn.put("session", session);
+        return path === "/release" ? { released: true } : { confirmed: true };
+      });
+      return outcome.error ? json({ error: outcome.error }, outcome.status) : json(outcome);
     }
 
     if (path === "/revoke") {

@@ -14,7 +14,7 @@ export function randomBridgeToken() {
 
 async function nameFor(origin, siteId) {
   if (!SITE_RE.test(siteId)) throw new Error("Invalid site ID");
-  return "__Host-tsumu_mcp_" + (await sha256(origin)).slice(0, 16) + "_" + siteId;
+  return "__Host-tsumu_mcp_" + (await sha256(origin)).slice(0, 32) + "_" + siteId;
 }
 
 export async function reconnectCookie(origin, siteId, sessionId, secret) {

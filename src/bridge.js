@@ -122,6 +122,10 @@ export async function bridgeRequest(request, env) {
         typeof input?.connectToken !== "string") {
       return bad("Invalid site invitation", 403, origin);
     }
+    const invitation = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/inspect", {
+      method: "POST", body: JSON.stringify({ grantId: input.grantId, ticket: input.ticket }),
+    });
+    if (!invitation.ok) return bad("Invalid or expired site invitation", 403, origin);
     const session = await env.BROWSER_SESSIONS.getByName(input.sessionId).fetch("https://internal/attach", {
       method: "POST", body: JSON.stringify({ connectToken: input.connectToken }),
     });

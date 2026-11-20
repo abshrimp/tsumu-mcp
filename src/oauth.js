@@ -50,8 +50,26 @@ export async function authorize(request, env) {
       return new Response(null, { status: 302, headers: denied.headers });
     }
     if (decision !== "approve" && decision !== "draft") return errorResponse(locale, "invalidRequest");
-    const code = decision === "approve" ? normalizeCode(form.get("code")) : null;
-    if (decision === "approve" && !code) return errorResponse(locale, "invalidCode");
+    let codes = [];
+    if (decision === "approve") {
+      if (form.has("codes")) {
+        // Official multi-site consent submits an explicit, bounded array of
+        // one-time codes; manual connection codes remain a separate path.
+        if (form.has("code")) return errorResponse(locale, "invalidCode");
+        let parsed;
+        try { parsed = JSON.parse(form.get("codes")); } catch { return errorResponse(locale, "invalidCode"); }
+        if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 12 ||
+            parsed.some(item => typeof item !== "string")) {
+          return errorResponse(locale, "invalidCode");
+        }
+        codes = parsed.map(item => normalizeCode(item));
+      } else {
+        codes = [normalizeCode(form.get("code"))];
+      }
+      if (codes.some(item => !item) || new Set(codes).size !== codes.length) {
+        return errorResponse(locale, "invalidCode");
+      }
+    }
 
     // Validate browser-bound consent before spending quota or claiming a pairing.
     const approved = await oauth.approveConsent(request, handle, { scope: ["tsumu:access"] });
@@ -72,14 +90,21 @@ export async function authorize(request, env) {
       userId = crypto.randomUUID();
       props = { draftOnly: true, draftGrantId: userId };
     } else {
-      const paired = await redeemPairing(env, code, request.headers.get("CF-Connecting-IP") || "unknown");
+      const pairedSites = [];
+      for (const code of codes) {
+        const paired = await redeemPairing(env, code, request.headers.get("CF-Connecting-IP") || "unknown");
+        pairedSites.push({
+          siteId: paired.siteId, siteName: paired.siteName,
+          sessionId: paired.sessionId, canEdit: paired.canEdit,
+        });
+      }
+      if (new Set(pairedSites.map(site => site.sessionId)).size !== pairedSites.length) {
+        throw new Error("Invalid pairing code");
+      }
       userId = crypto.randomUUID();
       const grant = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/create", {
         method: "POST",
-        body: JSON.stringify({ grantId: userId, sites: [{
-          siteId: paired.siteId, siteName: paired.siteName,
-          sessionId: paired.sessionId, canEdit: paired.canEdit,
-        }] }),
+        body: JSON.stringify({ grantId: userId, sites: pairedSites }),
       });
       if (!grant.ok) throw new Error("Unable to register the authorized site");
       props = { grantId: userId };

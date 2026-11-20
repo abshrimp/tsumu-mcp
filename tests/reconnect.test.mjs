@@ -33,7 +33,7 @@ function fixture() {
         const room = new BrowserSession({ storage, getWebSockets: () => sockets }, {});
         rooms.set(id, { room, storage, sockets });
       }
-      return { fetch: request => rooms.get(id).room.fetch(request) };
+      return { fetch: (request, init) => rooms.get(id).room.fetch(typeof request === "string" ? new Request(request, init) : request) };
     } },
   };
   return { env, rooms };

@@ -60,10 +60,13 @@ async function consentFixture() {
   const authRequest = await oauth.parseAuthRequest(new Request(base + "/authorize?" + query));
   const consent = await oauth.beginConsent(authRequest);
   const cookie = consent.headers.get("Set-Cookie").split(";")[0];
-  const request = (decision = "draft", cookieValue = cookie, fields = {}) => new Request(base + "/authorize", {
-    method: "POST", headers: { Cookie: cookieValue },
-    body: new URLSearchParams({ handle: consent.handle, lang: "en", decision, code, ...fields }),
-  });
+  const request = (decision = "draft", cookieValue = cookie, fields = {}) => {
+    const values = new URLSearchParams({ handle: consent.handle, lang: "en", decision, code, ...fields });
+    if (Object.hasOwn(fields, "codes") && !Object.hasOwn(fields, "code")) values.delete("code");
+    return new Request(base + "/authorize", {
+      method: "POST", headers: { Cookie: cookieValue }, body: values,
+    });
+  };
   return { env, calls, request, storage };
 }
 
@@ -114,6 +117,151 @@ test("invalid code syntax can be corrected before consuming consent", async () =
   assert.deepEqual(fixture.calls, []);
   const valid = await authorize(fixture.request("approve"), fixture.env);
   assert.equal(valid.status, 302, await valid.text());
+});
+
+test("one OAuth approval grants exactly the two selected official sites", async () => {
+  const fixture = await consentFixture();
+  const anotherCode = "BCDEF-GHJKL-MNPQR-STUVW";
+  const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  let claims = 0;
+  let authorizedSites = null;
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    fixture.calls.push(path);
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      assert.equal(hashes.length, 2);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 5 * 60_000,
+      })) });
+    }
+    if (path === "/grant/create") {
+      authorizedSites = JSON.parse(options.body).sites;
+      return Response.json({ created: true });
+    }
+    throw new Error("Unexpected pairing operation " + path);
+  } }) };
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    fixture.calls.push(path);
+    if (path === "/confirm-claim") return Response.json({ confirmed: true });
+    assert.equal(path, "/claim");
+    assert.match(JSON.parse(options.body).claimId, /^[0-9a-f-]{36}$/);
+    claims++;
+    return Response.json({ siteId: id === sessionId ? "site-a" : "site-b",
+      siteName: id === sessionId ? "Alpha" : "Beta", canEdit: id === sessionId });
+  } }) };
+  const response = await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, anotherCode]),
+  }), fixture.env);
+  assert.equal(response.status, 302, await response.text());
+  assert.deepEqual(fixture.calls, ["/take-many", "/claim", "/claim", "/grant/create", "/confirm-claim", "/confirm-claim"]);
+  assert.equal(claims, 2);
+  assert.deepEqual(authorizedSites, [
+    { siteId: "site-a", siteName: "Alpha", canEdit: true, sessionId },
+    { siteId: "site-b", siteName: "Beta", canEdit: false, sessionId: secondSession },
+  ]);
+  assert.equal((await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, anotherCode]),
+  }), fixture.env)).status, 400, "the one-time OAuth consent cannot be reused");
+});
+
+test("failed grant creation rolls back all provisional multi-site claims after abort confirmation", async () => {
+  const fixture = await consentFixture();
+  const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  const anotherCode = "BCDEF-GHJKL-MNPQR-STUVW";
+  const calls = [];
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 60_000,
+      })) });
+    }
+    if (path === "/grant/create") return Response.json({ error: "Unavailable" }, { status: 503 });
+    if (path === "/grant/abort") return Response.json({ aborted: true });
+    if (path === "/restore") return Response.json({ restored: true });
+    assert.fail(path);
+  } }) };
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async url => {
+    const path = new URL(url).pathname;
+    calls.push(path + ":" + id);
+    if (path === "/claim") return Response.json({ siteId: id === sessionId ? "a" : "b",
+      siteName: "Site", canEdit: true });
+    if (path === "/release") return Response.json({ released: true });
+    assert.fail(path);
+  } }) };
+  const res = await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, anotherCode]),
+  }), fixture.env);
+  assert.equal(res.status, 503);
+  assert.deepEqual(calls, [
+    "/take-many", "/claim:" + sessionId, "/claim:" + secondSession,
+    "/grant/create", "/grant/abort",
+    "/release:" + sessionId, "/restore",
+    "/release:" + secondSession, "/restore",
+  ]);
+});
+
+test("uncertain grant revocation never restores pairing codes to a second client", async () => {
+  const fixture = await consentFixture();
+  const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  const calls = [];
+  fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 60_000,
+      })) });
+    }
+    if (path === "/grant/create") throw new Error("Grant response lost");
+    if (path === "/grant/abort") throw new Error("Cannot confirm grant removal");
+    assert.fail("Claims must remain consumed when grant deletion is uncertain: " + path);
+  } }) };
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async url => {
+    const path = new URL(url).pathname;
+    calls.push(path + ":" + id);
+    if (path === "/claim") return Response.json({ siteId: id === sessionId ? "a" : "b",
+      siteName: "Site", canEdit: true });
+    assert.fail("A failed abort must not release provisional claims: " + path);
+  } }) };
+  const res = await authorize(fixture.request("approve", undefined, {
+    codes: JSON.stringify([code, "BCDEF-GHJKL-MNPQR-STUVW"]),
+  }), fixture.env);
+  assert.equal(res.status, 503);
+  assert.deepEqual(calls, [
+    "/take-many", "/claim:" + sessionId, "/claim:" + secondSession,
+    "/grant/create", "/grant/abort",
+  ]);
+});
+
+test("invalid multi-site code arrays fail before OAuth consent or pairing", async () => {
+  const cases = [
+    "not-json", "[]", JSON.stringify(["bad"]), JSON.stringify([code, code]),
+    JSON.stringify([code, 12]), JSON.stringify(Array(13).fill(code)),
+    JSON.stringify({ codes: [code] }),
+  ];
+  for (const codes of cases) {
+    const fixture = await consentFixture();
+    const response = await authorize(fixture.request("approve", undefined, { codes }), fixture.env);
+    assert.equal(response.status, 400, codes);
+    assert.deepEqual(fixture.calls, [], "malformed input must not consume pairing codes");
+    const recovered = await authorize(fixture.request("approve"), fixture.env);
+    assert.equal(recovered.status, 302, await recovered.text());
+  }
+  const fixture = await consentFixture();
+  const mixed = await authorize(fixture.request("approve", undefined, {
+    code, codes: JSON.stringify([code]),
+  }), fixture.env);
+  assert.equal(mixed.status, 400, "manual and multi-site forms cannot be mixed");
+  assert.deepEqual(fixture.calls, []);
 });
 
 test("quota rejection clears the consumed consent cookie", async () => {

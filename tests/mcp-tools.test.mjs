@@ -9,7 +9,7 @@ const env = {
   PAIRINGS: { getByName: () => ({ fetch: async (url, init) => {
     const path = new URL(url).pathname;
     const args = JSON.parse(init.body);
-    if (path === "/grant/resolve") return Response.json({ sessionId, siteId: "demo" });
+    if (path === "/grant/resolve") return Response.json({ sessionId, siteId: "demo", siteName: "Demo" });
     if (path === "/grant/list") return Response.json({ sites: [{ siteId: "demo", siteName: "Demo", sessionId, canEdit: true }], activeSiteId: "demo", activeSiteRef: sessionId });
     if (path === "/grant/select") return args.siteId === "demo" || args.siteRef === sessionId ? Response.json({ activeSiteId: "demo", activeSiteRef: sessionId }) :
       Response.json({ error: "Site not authorized" }, { status: 403 });
@@ -32,7 +32,7 @@ const env = {
             return Response.json({ result: { applied: message.args.operations } });
           }
           if (String(_request).endsWith("/info")) {
-            return Response.json({ siteId: "demo", siteName: "Demo", canEdit: true, connected: true });
+            return Response.json({ siteId: "demo", siteName: "Demo", canEdit: true, connected: true, origin: "https://tsumu.ebii.net" });
           }
           return Response.json({ error: "Unexpected action" }, { status: 400 });
         },
@@ -201,7 +201,7 @@ test("authenticated MCP tool call reaches the selected browser session", async (
   assert.equal(response.status, 200, body);
   assert.equal(message?.result?.content?.[0]?.type, "text", body);
   assert.deepEqual(JSON.parse(message.result.content[0].text), { sites: [
-    { id: "demo", siteRef: sessionId, name: "Demo", canEdit: true, connected: true, selected: true },
+    { id: "demo", siteRef: sessionId, name: "Demo", canEdit: true, connected: true, openUrl: "https://tsumu.ebii.net/sites/demo", selected: true },
   ], activeSiteId: "demo", activeSiteRef: sessionId });
 });
 
@@ -290,4 +290,42 @@ test("revoked browser permissions are hidden and cannot be selected", async () =
   }, auth, revokedEnv);
   assert.equal(selected.message?.result?.isError, true, selected.body);
   assert.match(selected.message.result.content[0].text, /revoked/);
+});
+
+test("offline selected editors prompt the AI to ask the user to open the correct tab", async () => {
+  let calls = 0;
+  const offlineEnv = {
+    ...env,
+    BROWSER_SESSIONS: { getByName(id) {
+      assert.equal(id, sessionId);
+      return { fetch: async url => {
+        const pathname = new URL(url).pathname;
+        if (pathname !== "/info") throw new Error("An offline editor must never receive commands");
+        calls++;
+        return Response.json({
+          siteId: "demo", siteName: "Demo", canEdit: true,
+          connected: false, origin: "https://tsumu.ebii.net",
+        });
+      } };
+    } },
+  };
+  const listed = await rpc("tools/call", { name: "list_sites", arguments: {} }, auth, offlineEnv);
+  assert.equal(listed.message?.result?.isError, false, listed.body);
+  const listing = JSON.parse(listed.message.result.content[0].text);
+  assert.deepEqual(listing.sites.map(site => ({ connected: site.connected, openUrl: site.openUrl })),
+    [{ connected: false, openUrl: "https://tsumu.ebii.net/sites/demo" }]);
+  const selected = await rpc("tools/call", {
+    name: "select_site", arguments: { siteId: "demo" },
+  }, auth, offlineEnv);
+  assert.equal(selected.message?.result?.isError, false, selected.body);
+  const selectedResult = JSON.parse(selected.message.result.content[0].text);
+  assert.equal(selectedResult.connected, false);
+  assert.match(selectedResult.instruction, /Ask the user to open https:\/\/tsumu\.ebii\.net\/sites\/demo/);
+  const operation = await rpc("tools/call", {
+    name: "list_pages", arguments: {},
+  }, auth, offlineEnv);
+  assert.equal(operation.message?.result?.isError, true, operation.body);
+  assert.match(operation.message.result.content[0].text, /Ask the user to open https:\/\/tsumu\.ebii\.net\/sites\/demo/);
+  assert.match(operation.message.result.content[0].text, /Do not claim that the operation was completed/);
+  assert.equal(calls, 3);
 });

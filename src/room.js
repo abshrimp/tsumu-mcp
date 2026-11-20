@@ -70,19 +70,47 @@ export class BrowserSession extends DurableObject {
     }
 
     if (path === "/claim") {
-      const session = await this.session();
-      // Only the authenticated, currently active editor socket may be claimed.
-      // Replaced or half-closed sockets must not consume an OAuth pairing code.
-      const connected = this.ctx.getWebSockets().some(socket =>
-        socket.readyState === WebSocket.OPEN &&
-        socket.deserializeAttachment()?.connectionId === session?.connectionId
-      );
-      if (!this.active(session) || session.claimed || !connected) {
-        return json({ error: "This Tsumu session is unavailable or already paired" }, 410);
+      if (input.claimId !== undefined &&
+          (typeof input.claimId !== "string" ||
+           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId))) {
+        return json({ error: "Invalid claim ID" }, 400);
       }
-      session.claimed = true;
-      await this.ctx.storage.put("session", session);
-      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
+      // Browser claims and provisional release/confirmation must serialize.
+      // Two OAuth requests cannot both claim a session that was unclaimed.
+      const result = await this.ctx.storage.transaction(async txn => {
+        const session = await txn.get("session");
+        const connected = this.ctx.getWebSockets().some(socket =>
+          socket.readyState === WebSocket.OPEN &&
+          socket.deserializeAttachment()?.connectionId === session?.connectionId
+        );
+        if (!this.active(session) || session.claimed || !connected) return null;
+        session.claimed = true;
+        if (input.claimId) session.pendingClaimId = input.claimId;
+        await txn.put("session", session);
+        return { siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit };
+      });
+      return result ? json(result) :
+        json({ error: "This Tsumu session is unavailable or already paired" }, 410);
+    }
+
+    if (path === "/release" || path === "/confirm-claim") {
+      if (typeof input.claimId !== "string" ||
+          !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId)) {
+        return json({ error: "Invalid provisional claim" }, 400);
+      }
+      const outcome = await this.ctx.storage.transaction(async txn => {
+        const session = await txn.get("session");
+        if (!session) return { status: 410, error: "Session unavailable" };
+        if (path === "/release" && !session.claimed) return { released: false };
+        if (!session.claimed || session.pendingClaimId !== input.claimId) {
+          return { status: 403, error: "Claim belongs to another authorization" };
+        }
+        if (path === "/release") session.claimed = false;
+        delete session.pendingClaimId;
+        await txn.put("session", session);
+        return path === "/release" ? { released: true } : { confirmed: true };
+      });
+      return outcome.error ? json({ error: outcome.error }, outcome.status) : json(outcome);
     }
 
     if (path === "/revoke") {
@@ -106,15 +134,14 @@ export class BrowserSession extends DurableObject {
       if (!session || session.revoked || !session.claimed || session.persistentUntil <= Date.now()) {
         return json({ error: "Session no longer authorized" }, 410);
       }
-      const connected = this.ctx.getWebSockets().some(socket =>
+      const connected = this.active(session) && this.ctx.getWebSockets().some(socket =>
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
       );
-      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected });
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected, origin: session.origin });
     }
     if (path === "/attach") {
       const session = await this.session();
-      if (!session || session.revoked || session.persistentUntil <= Date.now() ||
-          !session.connectionId || typeof input.connectToken !== "string" ||
+      if (!this.active(session) || !session.connectionId || typeof input.connectToken !== "string" ||
           await sha256(input.connectToken) !== session.secretHash) return json({ error: "Forbidden" }, 403);
       const connected = this.ctx.getWebSockets().some(socket =>
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId

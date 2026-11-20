@@ -2,8 +2,8 @@ export const consentMessages = {
   en: {
     pageTitle: "Connect an AI application | Tsumu",
     title: "Connect to Tsumu",
-    intro: "Choose how to connect this AI app.",
-    firstTimeIntro: "Choose how to connect this AI app.",
+    intro: "Select the sites to connect.",
+    approveSelectedSites: "Allow access to selected sites",
     chooseOfficial: "Choose a site",
     allowEdit: "Allow editing",
     codeOption: "Enter a connection code",
@@ -30,8 +30,8 @@ export const consentMessages = {
   ja: {
     pageTitle: "AIアプリとの接続 | Tsumu",
     title: "Tsumuへの接続",
-    intro: "接続方法を選択してください。",
-    firstTimeIntro: "接続方法を選択してください。",
+    intro: "接続するサイトを選択してください。",
+    approveSelectedSites: "選択したサイトへの接続を許可",
     chooseOfficial: "サイトを選択",
     allowEdit: "編集を許可",
     codeOption: "接続コードを入力",

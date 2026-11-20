@@ -35,11 +35,11 @@ A staged draft expires after one hour and is deleted after the editor confirms t
 ### Read or edit an existing site
 
 1. In the AI app, start OAuth for the MCP endpoint.
-2. For the official editor, select one of your sites directly on the MCP authorization page. Only non-secret site names and IDs are shared from Tsumu in the browser. If no sites are available, the site list is hidden.
-3. For a self-hosted editor, open **AIと接続（MCP）**, issue a code and enter it under **Connect a self-hosted Tsumu site** (below **Allow new-site creation only**).
+2. For the official editor, select up to 12 sites using the checkboxes on the MCP authorization page. Only non-secret site names and IDs are shared from Tsumu. The list scrolls independently and disappears when there are no available sites. Confirm each selected site from the authorization page; browsers require a user gesture to open each editor tab.
+3. For a self-hosted editor, open **AIと接続（MCP）**, issue a code and enter it under the collapsed **Enter a connection code** section (below **Allow new-site creation only**).
 4. Keep the editor tab open to edit. Connection permissions survive a browser restart for up to seven days of inactivity; active one-hour sessions renew automatically. Revoke permission from the editor when finished.
 
-The tools `list_sites` and `select_site` switch only between **explicitly approved sites**. `request_site_access` provides a separate one-time approval link for adding another site. A new site is not automatically granted. Do not share connection codes or approval links.
+The tools `list_sites` and `select_site` switch only between **explicitly approved sites**. If a selected editor is offline, the AI client receives a URL and an instruction to ask the user to open that site in their authorized browser before trying again. `request_site_access` provides a separate one-time approval link for adding another site. A new site is not automatically granted. Do not share connection codes or approval links.
 
 ## AI client plugins and distribution
 

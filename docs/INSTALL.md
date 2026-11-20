@@ -10,15 +10,15 @@ For an existing site, the browser tab holds the document and authorizes the conn
 
 **For a new site:** Add the MCP endpoint to your AI client and choose **Allow new-site creation only** on the OAuth page. This grant needs no existing Tsumu site, editor tab or connection code. It permits `get_site_doc_spec` and `stage_site_doc`, but cannot list, read or edit an existing site. Open the returned import link to create a new site in the editor; it is not automatically published.
 
-**For an existing site:** On the OAuth page, choose an official Tsumu site directly from the list (shown only when you have sites), then select its permission. A trusted frame on `tsumu.ebii.net` shares only the non-secret site list with the MCP authorization page; no authentication credentials or documents are copied.
+**For existing official sites:** On the OAuth page, select one or more sites (up to 12) using checkboxes, then confirm them from the authorization page. Each selected editor is opened separately because browsers require one click per popup. A trusted frame on `tsumu.ebii.net` shares only the non-secret site list with the MCP page; no authentication credentials or documents are copied.
 
-For **self-hosted editors**, open **AIと接続（MCP）** in the editor, issue a connection code, then expand **Connect a self-hosted Tsumu site** below **Allow new-site creation only** on the OAuth page. Enter the one-time code there.
+For **self-hosted editors**, open **AIと接続（MCP）** in the editor, issue a connection code, then expand **Enter a connection code** below **Allow new-site creation only** on the OAuth page. Enter the one-time code there.
 
-Keep the editor tab open while editing. Browser permissions last up to seven days of inactivity, with automatic short-session renewal while connected. Existing-site grants can cover multiple explicitly approved sites: call `list_sites`, `select_site`, or `request_site_access` to add another site. A newly created site never inherits permission automatically.
+Keep the editor tab open while editing. Browser permissions last up to seven days of inactivity, with automatic short-session renewal while connected. Existing-site grants can cover multiple explicitly approved sites: call `list_sites`, `select_site`, or `request_site_access` to add another site. When `connected` is false, the AI client must ask the user to open the returned `openUrl` in the same authorized browser before retrying. A newly created site never inherits permission automatically.
 
 A screenshot guide for end users (Japanese and English) is served at https://mcp.tsumu.ebii.net/. While the plugin listings are under review it shows the manual setup for each client; `GUIDE_MODE` in `src/guide-links.js` switches it to the plugin-only guide.
 
-The connection choices are always in this order: available official sites, **Allow new-site creation only**, then the self-hosted connection code. The official-site section is omitted when there are no accessible sites.
+The connection choices are always in this order: a scrollable list of available official sites, **Allow new-site creation only**, then the collapsed connection-code input. The official-site section is omitted when there are no accessible sites.
 
 ## Skills and new-site handoff
 

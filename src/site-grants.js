@@ -40,6 +40,14 @@ export async function siteGrantsRequest(storage, path, input) {
     return noStore({ created }, created ? 200 : 409);
   }
 
+  if (path === "/grant/abort") {
+    // Only the OAuth Worker invokes this after a failed final authorization.
+    // Removing the orphan grant avoids retaining authorization records that
+    // have no corresponding client access token.
+    await storage.delete(key);
+    return noStore({ aborted: true });
+  }
+
   // The OAuth grant has a sliding seven-day idle timeout, separate from each
   // browser bridge's short-lived session. Only authenticated MCP operations
   // (not a third-party invitation inspection) refresh this grant.

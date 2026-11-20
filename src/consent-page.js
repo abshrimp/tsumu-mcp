@@ -60,10 +60,6 @@ function layout(locale, content, request) {
 
 export function consentPage(details, handle, request, locale) {
   const t = consentMessages[locale];
-  // This cookie is only a display preference. It never changes authorization
-  // permissions or bypasses the required one-time pairing code.
-  const hasCodeHistory = (request?.headers.get("Cookie") || "")
-    .split(";").some(value => value.trim() === "tsumu_mcp_code_issued=1");
   const identity = details.clientDomain
     ? escapeHtml(t.verifiedDomain) + escapeHtml(details.clientDomain)
     : escapeHtml(t.unverifiedDomain);
@@ -85,24 +81,25 @@ export function consentPage(details, handle, request, locale) {
   // same-origin site directory through a strictly scoped postMessage.
   const officialControls =
     "<section id='official-sites' class='official-sites' hidden>" +
-      "<h2>" + escapeHtml(t.chooseOfficial) + "</h2>" +
-      "<label class='official-edit'><input id='official-edit' type='checkbox' checked> " +
-        escapeHtml(t.allowEdit) + "</label>" +
-      "<div id='official-site-list' class='official-site-list' role='group' aria-label='" +
-        escapeHtml(t.chooseOfficial) + "'></div>" +
-      "<p id='official-site-error' class='error' role='alert' hidden></p>" +
+      "<form method='post' action='/authorize' id='official-site-authorization'>" +
+        "<input type='hidden' name='handle' value='" + escapeHtml(handle) + "'>" +
+        "<input type='hidden' name='lang' value='" + locale + "'>" +
+        "<input type='hidden' name='decision' value='approve'>" +
+        "<input type='hidden' name='codes' value=''>" +
+        "<div id='official-site-list' class='official-site-list' role='group' aria-label='" +
+          escapeHtml(t.chooseOfficial) + "'></div>" +
+        "<label class='official-edit'><input id='official-edit' type='checkbox' checked> " +
+          escapeHtml(t.allowEdit) + "</label>" +
+        "<p id='official-site-error' class='error' role='alert' hidden></p>" +
+        "<button class='approve' id='approve-selected-sites' type='button' disabled>" +
+          escapeHtml(t.approveSelectedSites) + "</button>" +
+      "</form>" +
     "</section>" +
     "<iframe id='official-site-directory' title='Tsumu site directory' hidden " +
-      "referrerpolicy='no-referrer' aria-hidden='true' tabindex='-1'></iframe>" +
-    "<form method='post' action='/authorize' id='official-site-authorization'>" +
-      "<input type='hidden' name='handle' value='" + escapeHtml(handle) + "'>" +
-      "<input type='hidden' name='lang' value='" + locale + "'>" +
-      "<input type='hidden' name='decision' value='approve'>" +
-      "<input type='hidden' name='code' value=''>" +
-    "</form>";
+      "referrerpolicy='no-referrer' aria-hidden='true' tabindex='-1'></iframe>";
   const choices = officialControls +
     "<div class='draft-choice'>" + draftControls + "</div>" +
-    "<details class='code-option'" + (hasCodeHistory ? " open" : "") + "><summary>" +
+    "<details class='code-option'><summary>" +
       escapeHtml(t.codeOption) + "</summary><div class='code-content'>" +
       codeControls + "</div></details>";
 
@@ -114,7 +111,7 @@ export function consentPage(details, handle, request, locale) {
       "<svg class='connection-arrow' viewBox='0 0 24 24' aria-hidden='true'><path d='M4 12h16m-6-6 6 6-6 6'/></svg>" +
       "<span class='destination-icon' aria-label='Tsumu'>" + brand + "</span></div>" +
     "<h1>" + escapeHtml(t.title) + "</h1>" +
-    "<p class='intro'>" + escapeHtml(hasCodeHistory ? t.intro : t.firstTimeIntro) + "</p>" +
+    "<p class='intro'>" + escapeHtml(t.intro) + "</p>" +
     choices + form("<button class='deny' type='submit' name='decision' value='deny'>" + escapeHtml(t.deny) + "</button>") +
     "<details class='details'><summary>" + escapeHtml(t.details) + "</summary>" +
       "<dl><div><dt>" + escapeHtml(t.redirect) + "</dt><dd>" + escapeHtml(details.redirectHost) + "</dd></div>" +

@@ -1,6 +1,6 @@
 import { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { normalizeCode, sha256 } from "./pair-code.js";
-import { redeemPairing } from "./bridge.js";
+import { redeemPairing, redeemPairings } from "./bridge.js";
 import { consentCsp } from "./consent-csp.js";
 import { consentLocale, consentErrorKey } from "./consent-locales.js";
 import { consentPage, consentErrorPage } from "./consent-page.js";
@@ -26,6 +26,8 @@ export async function authorize(request, env) {
   const oauth = env.OAUTH_PROVIDER;
   let locale = consentLocale(request);
   let consentHeaders;
+  let pendingBatch = null;
+  let attemptedGrantId = null;
   try {
     if (request.method === "GET") {
       const authRequest = await oauth.parseAuthRequest(request);
@@ -50,8 +52,26 @@ export async function authorize(request, env) {
       return new Response(null, { status: 302, headers: denied.headers });
     }
     if (decision !== "approve" && decision !== "draft") return errorResponse(locale, "invalidRequest");
-    const code = decision === "approve" ? normalizeCode(form.get("code")) : null;
-    if (decision === "approve" && !code) return errorResponse(locale, "invalidCode");
+    let codes = [];
+    if (decision === "approve") {
+      if (form.has("codes")) {
+        // Official multi-site consent submits an explicit, bounded array of
+        // one-time codes; manual connection codes remain a separate path.
+        if (form.has("code")) return errorResponse(locale, "invalidCode");
+        let parsed;
+        try { parsed = JSON.parse(form.get("codes")); } catch { return errorResponse(locale, "invalidCode"); }
+        if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 12 ||
+            parsed.some(item => typeof item !== "string")) {
+          return errorResponse(locale, "invalidCode");
+        }
+        codes = parsed.map(item => normalizeCode(item));
+      } else {
+        codes = [normalizeCode(form.get("code"))];
+      }
+      if (codes.some(item => !item) || new Set(codes).size !== codes.length) {
+        return errorResponse(locale, "invalidCode");
+      }
+    }
 
     // Validate browser-bound consent before spending quota or claiming a pairing.
     const approved = await oauth.approveConsent(request, handle, { scope: ["tsumu:access"] });
@@ -72,14 +92,22 @@ export async function authorize(request, env) {
       userId = crypto.randomUUID();
       props = { draftOnly: true, draftGrantId: userId };
     } else {
-      const paired = await redeemPairing(env, code, request.headers.get("CF-Connecting-IP") || "unknown");
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      const paired = codes.length === 1
+        ? [await redeemPairing(env, codes[0], ip)]
+        : (pendingBatch = await redeemPairings(env, codes, ip)).sites;
+      const pairedSites = paired.map(site => ({
+        siteId: site.siteId, siteName: site.siteName,
+        sessionId: site.sessionId, canEdit: site.canEdit,
+      }));
+      if (new Set(pairedSites.map(site => site.sessionId)).size !== pairedSites.length) {
+        throw new Error("Invalid pairing code");
+      }
       userId = crypto.randomUUID();
+      attemptedGrantId = pendingBatch ? userId : null;
       const grant = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/create", {
         method: "POST",
-        body: JSON.stringify({ grantId: userId, sites: [{
-          siteId: paired.siteId, siteName: paired.siteName,
-          sessionId: paired.sessionId, canEdit: paired.canEdit,
-        }] }),
+        body: JSON.stringify({ grantId: userId, sites: pairedSites }),
       });
       if (!grant.ok) throw new Error("Unable to register the authorized site");
       props = { grantId: userId };
@@ -92,8 +120,26 @@ export async function authorize(request, env) {
       props,
     });
     consentHeaders.set("Location", redirectTo);
+    // The pending claim secret is discarded only after OAuth has issued a
+    // redirect. Stale approvals must not be able to unclaim successful grants.
+    if (pendingBatch) await pendingBatch.confirm();
     return new Response(null, { status: 302, headers: consentHeaders });
   } catch (error) {
+    if (pendingBatch) {
+      // If the grant creation response was lost, it might still have succeeded.
+      // Never make an already-authorized session's codes reusable unless that
+      // potentially created grant has first been removed successfully.
+      let safeToRollback = !attemptedGrantId;
+      if (attemptedGrantId) {
+        try {
+          const aborted = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/abort", {
+            method: "POST", body: JSON.stringify({ grantId: attemptedGrantId }),
+          });
+          safeToRollback = aborted.ok;
+        } catch { /* Fail closed: do not release possibly authorized sessions. */ }
+      }
+      if (safeToRollback) await pendingBatch.rollback();
+    }
     if (error instanceof AuthorizationError && error.redirectTo) {
       return Response.redirect(error.redirectTo, 302);
     }

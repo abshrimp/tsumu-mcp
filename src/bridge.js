@@ -215,3 +215,85 @@ export async function redeemPairing(env, code, requesterIp) {
   }
   return { sessionId, ...(await claim.json()) };
 }
+
+
+/**
+ * Pair a multi-site selection as one bounded batch. Registry consumption is
+ * atomic: an invalid code never burns earlier valid codes. Browser claims are
+ * provisional until OAuth succeeds and can be rolled back if a later socket
+ * closes or grant creation fails.
+ */
+export async function redeemPairings(env, codes, requesterIp) {
+  if (!Array.isArray(codes) || codes.length < 2 || codes.length > 12 ||
+      codes.some(code => typeof code !== "string") ||
+      new Set(codes).size !== codes.length) {
+    throw new Error("Invalid pairing codes");
+  }
+  const hashes = await Promise.all(codes.map(sha256));
+  const registry = env.PAIRINGS.getByName("global");
+  const requester = await sha256(requesterIp || "unknown");
+  const reserved = await registry.fetch("https://internal/take-many", {
+    method: "POST", body: JSON.stringify({ hashes, requester }),
+  });
+  if (!reserved.ok) {
+    if (reserved.status !== 400 && reserved.status !== 429) {
+      throw new Error("Pairing service unavailable");
+    }
+    const data = await reserved.json();
+    throw new Error(data.error || "Invalid or expired code");
+  }
+  const { entries } = await reserved.json();
+  const claimId = crypto.randomUUID();
+  const roomFor = entry => env.BROWSER_SESSIONS.getByName(entry.sessionId);
+  const rollback = async () => {
+    // Never make an already-claimed editor's one-time code reusable unless
+    // this exact provisional claim was released (or the site was unclaimed).
+    for (const entry of entries) {
+      try {
+        const released = await roomFor(entry).fetch("https://internal/release", {
+          method: "POST", body: JSON.stringify({ claimId }),
+        });
+        if (!released.ok) continue;
+        await registry.fetch("https://internal/restore", {
+          method: "POST",
+          body: JSON.stringify({
+            hash: entry.hash, sessionId: entry.sessionId, expiresAt: entry.expiresAt,
+          }),
+        });
+      } catch { /* An uncertain claim must not be made reusable. */ }
+    }
+  };
+  const confirm = async () => {
+    for (const entry of entries) {
+      try {
+        await roomFor(entry).fetch("https://internal/confirm-claim", {
+          method: "POST", body: JSON.stringify({ claimId }),
+        });
+      } catch { /* A completed OAuth grant remains authorized. */ }
+    }
+  };
+  const sites = [];
+  try {
+    if (!Array.isArray(entries) || entries.length !== codes.length ||
+        entries.some((entry, index) =>
+          !entry || entry.hash !== hashes[index] ||
+          !SESSION_ID.test(entry.sessionId) || !Number.isSafeInteger(entry.expiresAt))) {
+      throw new Error("Pairing service unavailable");
+    }
+    for (const entry of entries) {
+      const claim = await roomFor(entry).fetch("https://internal/claim", {
+        method: "POST", body: JSON.stringify({ claimId }),
+      });
+      if (!claim.ok) {
+        if (claim.status !== 410) throw new Error("Pairing service unavailable");
+        throw new Error("The browser is not connected, or this code was already used");
+      }
+      const site = await claim.json();
+      sites.push({ sessionId: entry.sessionId, ...site });
+    }
+  } catch (error) {
+    await rollback();
+    throw error;
+  }
+  return { sites, rollback, confirm };
+}

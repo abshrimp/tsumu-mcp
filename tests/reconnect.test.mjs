@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bridgeRequest } from "../src/bridge.js";
-import { BrowserSession } from "../src/room.js";
+import { registerHooks } from "node:module";
+const hook = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "cloudflare:workers") {
+      return { url: "data:text/javascript,export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }", shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const { BrowserSession } = await import("../src/room.js");
+hook.deregister();
 import { memoryStorage } from "./helpers/durable-object.mjs";
 import { sha256 } from "../src/pair-code.js";
 import { reconnectCookie, readReconnectCookie, clearReconnectCookie } from "../src/bridge-cookie.js";

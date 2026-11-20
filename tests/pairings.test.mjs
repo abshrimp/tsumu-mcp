@@ -72,3 +72,68 @@ test("failed browser claim can restore a one-time code without extending its exp
   assert.equal((await post("restore", { hash, sessionId, expiresAt: originalExpiry })).status, 400);
   assert.equal(storage.records.has("code:" + hash), false);
 });
+
+
+test("multi-site codes are reserved atomically and can be restored without extending expiry", async t => {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const storage = memoryStorage();
+  const registry = new PairingRegistry({ storage }, {});
+  const post = (route, data) => registry.fetch(new Request("https://internal/" + route, {
+    method: "POST", body: JSON.stringify(data),
+  }));
+  const firstHash = "b".repeat(64);
+  const secondHash = "c".repeat(64);
+  const missingHash = "d".repeat(64);
+  const firstId = "12345678-1234-4234-8234-123456789abc";
+  const secondId = "abcdef01-1234-4234-8234-abcdef012345";
+  await post("put", { hash: firstHash, sessionId: firstId });
+  await post("put", { hash: secondHash, sessionId: secondId });
+  const expiresAt = (await storage.get("code:" + firstHash)).expiresAt;
+
+  assert.equal((await post("take-many", {
+    requester, hashes: [firstHash, missingHash],
+  })).status, 400);
+  assert.ok(await storage.get("code:" + firstHash),
+    "an invalid second code must not consume a valid first code");
+  assert.equal((await post("take-many", {
+    requester, hashes: [firstHash, firstHash],
+  })).status, 400, "duplicate codes cannot be reserved twice");
+
+  const reserved = await post("take-many", {
+    requester, hashes: [firstHash, secondHash],
+  });
+  assert.equal(reserved.status, 200);
+  assert.deepEqual(await reserved.json(), { entries: [
+    { hash: firstHash, sessionId: firstId, expiresAt },
+    { hash: secondHash, sessionId: secondId, expiresAt },
+  ] });
+  assert.equal(await storage.get("code:" + firstHash), undefined);
+  assert.equal(await storage.get("code:" + secondHash), undefined);
+  assert.equal((await post("take-many", {
+    requester, hashes: [firstHash, secondHash],
+  })).status, 400);
+
+  now += 20_000;
+  for (const [oneHash, id] of [[firstHash, firstId], [secondHash, secondId]]) {
+    assert.equal((await post("restore", { hash: oneHash, sessionId: id, expiresAt })).status, 200);
+    assert.equal((await storage.get("code:" + oneHash)).expiresAt, expiresAt);
+  }
+  now = expiresAt;
+  assert.equal((await post("restore", { hash: firstHash, sessionId: firstId, expiresAt })).status, 400);
+});
+
+test("batch pairing attempts count against the same abuse limit as individual attempts", async t => {
+  t.mock.method(Date, "now", () => 1_000_000);
+  const storage = memoryStorage();
+  const registry = new PairingRegistry({ storage }, {});
+  const post = hashes => registry.fetch(new Request("https://internal/take-many", {
+    method: "POST", body: JSON.stringify({ requester, hashes }),
+  }));
+  const hashes = Array.from({ length: 12 }, (_, i) => String(i).padStart(64, "0"));
+  assert.equal((await post(hashes)).status, 400);
+  assert.equal((await storage.get("rate:" + requester)).count, 12);
+  assert.equal((await post(hashes)).status, 429,
+    "two full-size attempts must not exceed the 20-code rate limit");
+  assert.equal((await storage.get("rate:" + requester)).count, 12);
+});

@@ -12,10 +12,13 @@ const request = (cookie = "") => new Request("https://mcp.tsumu.ebii.net/authori
 
 test("OAuth shows official-site selection first and keeps code and draft authorization available", () => {
   const html = consentPage(details, "opaque-handle", request(), "ja");
-  assert.match(html, /公式Tsumuのサイトを選択するか/);
-  assert.match(html, /id='choose-official-site'/);
-  assert.match(html, /<details class='code-option'><summary>接続コードがある場合はこちら<\/summary>/);
-  assert.ok(html.indexOf("id='choose-official-site'") < html.indexOf("class='code-option'"));
+  assert.match(html, /接続方法を選択してください/);
+  assert.match(html, /id='official-sites' class='official-sites' hidden/);
+  assert.match(html, /id='official-site-directory'/);
+  assert.match(html, /<details class='code-option'><summary>セルフホスト版の接続コードを入力<\/summary>/);
+  assert.ok(html.indexOf("id='official-sites'") < html.indexOf("value='draft'"));
+  assert.ok(html.indexOf("value='draft'") < html.indexOf("class='code-option'"),
+    "self-hosted code comes after the draft-only choice");
   assert.match(html, /name='code'[^>]+required/);
   assert.match(html, /name='decision' value='draft'/);
   assert.match(html, /name='decision' value='deny'/);
@@ -24,7 +27,7 @@ test("OAuth shows official-site selection first and keeps code and draft authori
 
 test("self-hosted code users retain a visible code form when the UI history cookie is present", () => {
   const html = consentPage(details, "opaque-handle", request("other=1; tsumu_mcp_code_issued=1"), "ja");
-  assert.match(html, /Tsumuの接続コードを入力して/);
+  assert.match(html, /接続方法を選択してください/);
   assert.match(html, /class='code-option' open/);
   assert.match(html, /name='code'[^>]+required/);
   assert.match(html, /name='decision' value='approve'/);
@@ -35,8 +38,8 @@ test("self-hosted code users retain a visible code form when the UI history cook
 test("unrelated or invalid cookie values do not change the official site picker", () => {
   for (const cookie of ["tsumu_mcp_code_issued=0", "tsumu_mcp_code_issued=10", "other_tsumu_mcp_code_issued=1"]) {
     const html = consentPage(details, "handle", request(cookie), "en");
-    assert.match(html, /id='choose-official-site'/, cookie);
-    assert.match(html, /Have a connection code\? Use it here/, cookie);
+    assert.match(html, /id='official-sites'/, cookie);
+    assert.match(html, /Connect a self-hosted Tsumu site/, cookie);
   }
 });
 

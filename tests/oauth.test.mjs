@@ -124,21 +124,31 @@ test("one OAuth approval grants exactly the two selected official sites", async 
   const anotherCode = "BCDEF-GHJKL-MNPQR-STUVW";
   const secondSession = "abcdef12-abcd-4abc-8abc-abcdef123456";
   let claims = 0;
-  let takes = 0;
   let authorizedSites = null;
   fixture.env.PAIRINGS = { getByName: () => ({ fetch: async (url, options) => {
     const path = new URL(url).pathname;
     fixture.calls.push(path);
-    if (path === "/take") return Response.json({ sessionId: ++takes === 1 ? sessionId : secondSession });
+    if (path === "/take-many") {
+      const { hashes } = JSON.parse(options.body);
+      assert.equal(hashes.length, 2);
+      return Response.json({ entries: hashes.map((hash, index) => ({
+        hash, sessionId: index === 0 ? sessionId : secondSession,
+        expiresAt: Date.now() + 5 * 60_000,
+      })) });
+    }
     if (path === "/grant/create") {
       authorizedSites = JSON.parse(options.body).sites;
       return Response.json({ created: true });
     }
     throw new Error("Unexpected pairing operation " + path);
   } }) };
-  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async () => {
+  fixture.env.BROWSER_SESSIONS = { getByName: id => ({ fetch: async (url, options) => {
+    const path = new URL(url).pathname;
+    fixture.calls.push(path);
+    if (path === "/confirm-claim") return Response.json({ confirmed: true });
+    assert.equal(path, "/claim");
+    assert.match(JSON.parse(options.body).claimId, /^[0-9a-f-]{36}$/);
     claims++;
-    fixture.calls.push("/claim");
     return Response.json({ siteId: id === sessionId ? "site-a" : "site-b",
       siteName: id === sessionId ? "Alpha" : "Beta", canEdit: id === sessionId });
   } }) };
@@ -146,7 +156,7 @@ test("one OAuth approval grants exactly the two selected official sites", async 
     codes: JSON.stringify([code, anotherCode]),
   }), fixture.env);
   assert.equal(response.status, 302, await response.text());
-  assert.deepEqual(fixture.calls, ["/take", "/claim", "/take", "/claim", "/grant/create"]);
+  assert.deepEqual(fixture.calls, ["/take-many", "/claim", "/claim", "/grant/create", "/confirm-claim", "/confirm-claim"]);
   assert.equal(claims, 2);
   assert.deepEqual(authorizedSites, [
     { siteId: "site-a", siteName: "Alpha", canEdit: true, sessionId },

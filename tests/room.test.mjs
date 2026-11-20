@@ -128,3 +128,54 @@ test("large, schema-valid edits reach the browser bridge instead of failing at 1
   assert.equal(response.status, 503);
   assert.match((await response.json()).error, /disconnected/i);
 });
+
+
+test("only the matching provisional OAuth claim can be released or finalized", async () => {
+  const { storage, sockets, room } = await sessionFixture();
+  const session = await storage.get("session");
+  await storage.put("session", { ...session, claimed: false });
+  sockets.push({
+    readyState: WebSocket.OPEN,
+    deserializeAttachment: () => ({ connectionId: "connection-1" }),
+  });
+  const claimId = "0b48ec87-7f50-4b0c-8c81-824d594a483c";
+  const otherId = "12345678-1234-4234-8234-123456789abc";
+  const post = (path, body) => room.fetch(new Request("https://internal/" + path, {
+    method: "POST", body: JSON.stringify(body),
+  }));
+  assert.equal((await post("claim", { claimId })).status, 200);
+  assert.equal((await storage.get("session")).claimed, true);
+  assert.equal((await post("release", { claimId: otherId })).status, 403,
+    "an unrelated OAuth approval cannot undo this claim");
+  assert.equal((await storage.get("session")).claimed, true);
+  assert.equal((await post("release", { claimId })).status, 200);
+  assert.equal((await storage.get("session")).claimed, false);
+  assert.equal((await post("release", { claimId })).status, 200,
+    "releasing an unclaimed session is safe and idempotent");
+
+  assert.equal((await post("claim", { claimId })).status, 200);
+  assert.equal((await post("confirm-claim", { claimId })).status, 200);
+  assert.equal((await post("release", { claimId })).status, 403,
+    "a completed authorization can no longer be rolled back");
+  assert.equal((await storage.get("session")).claimed, true);
+});
+
+test("expired active sessions are offline even when a WebSocket remains open", async () => {
+  const { storage, sockets, room } = await sessionFixture();
+  const session = await storage.get("session");
+  await storage.put("session", { ...session, expiresAt: Date.now() - 1,
+    origin: "https://tsumu.ebii.net" });
+  sockets.push({
+    readyState: WebSocket.OPEN,
+    deserializeAttachment: () => ({ connectionId: "connection-1" }),
+  });
+  const info = await room.fetch(new Request("https://internal/info", {
+    method: "POST", body: "{}",
+  }));
+  assert.equal(info.status, 200);
+  assert.equal((await info.json()).connected, false);
+  const attach = await room.fetch(new Request("https://internal/attach", {
+    method: "POST", body: JSON.stringify({ connectToken: "connect-token" }),
+  }));
+  assert.equal(attach.status, 403, "an expired session cannot be newly attached");
+});

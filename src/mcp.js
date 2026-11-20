@@ -55,25 +55,54 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
   }, async () => {
     try {
       const grant = await grantCall(env, grantId, "list");
-      const sites = await Promise.all(grant.sites.map(async site => {
+      const sites = (await Promise.all(grant.sites.map(async site => {
         const room = env.BROWSER_SESSIONS.getByName(site.sessionId);
         const status = await room.fetch("https://internal/info", { method: "POST", body: "{}" })
           .then(async res => res.ok ? res.json() : null).catch(() => null);
-        return { id: site.siteId, name: site.siteName, canEdit: site.canEdit,
-          connected: status?.connected === true, selected: site.siteId === grant.activeSiteId };
-      }));
-      return textResult({ sites, activeSiteId: grant.activeSiteId });
+        // An OAuth client must not retain visibility of sites whose browser
+        // permission has been revoked or has exceeded its idle expiry.
+        if (!status || status.siteId !== site.siteId) return null;
+        return { id: site.siteId, siteRef: site.sessionId, name: site.siteName,
+          canEdit: site.canEdit && status.canEdit === true,
+          connected: status.connected === true, selected: site.sessionId === grant.activeSiteRef };
+      }))).filter(Boolean);
+      const selected = sites.find(site => site.selected);
+      return textResult({
+        sites, activeSiteId: selected?.id ?? null, activeSiteRef: selected?.siteRef ?? null,
+      });
     } catch (error) {
       return textResult(error instanceof Error ? error.message : "Cannot list sites", true);
     }
   });
   server.registerTool("select_site", {
-    description: "Select a site from list_sites. Only explicitly authorized sites can be selected. This does not grant access to new sites; offline sites cannot be edited until their Tsumu tab is open.",
-    inputSchema: z.strictObject({ siteId: z.string().min(1).max(100) }),
+    description: "Select an explicitly authorized site from list_sites. Supply siteId when unique, or siteRef to disambiguate identical IDs on different Tsumu instances. Offline sites cannot be edited until their editor tab is open.",
+    inputSchema: z.strictObject({
+      siteId: z.string().min(1).max(100).optional(),
+      siteRef: z.string().uuid().optional(),
+    }).refine(({ siteId, siteRef }) => (siteId === undefined) !== (siteRef === undefined), {
+      message: "Specify exactly one of siteId or siteRef",
+    }),
     annotations: { title: "Select authorized site", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  }, async ({ siteId }) => {
-    try { return textResult(await grantCall(env, grantId, "select", { siteId })); }
-    catch (error) { return textResult(error instanceof Error ? error.message : "Cannot select site", true); }
+  }, async ({ siteId, siteRef }) => {
+    try {
+      const grant = await grantCall(env, grantId, "list");
+      const matches = grant.sites.filter(site =>
+        siteRef !== undefined ? site.sessionId === siteRef : site.siteId === siteId
+      );
+      if (matches.length === 0) throw new Error("Site not authorized");
+      if (matches.length > 1) throw new Error("Site ID is ambiguous; choose its siteRef from list_sites");
+      const room = env.BROWSER_SESSIONS.getByName(matches[0].sessionId);
+      const statusResponse = await room.fetch("https://internal/info", {
+        method: "POST", body: "{}",
+      });
+      if (!statusResponse.ok) throw new Error("Site authorization expired or was revoked");
+      const status = await statusResponse.json();
+      if (status.siteId !== matches[0].siteId) throw new Error("Site authorization does not match");
+      return textResult(await grantCall(env, grantId, "select",
+        siteRef !== undefined ? { siteRef } : { siteId }));
+    } catch (error) {
+      return textResult(error instanceof Error ? error.message : "Cannot select site", true);
+    }
   });
   server.registerTool("request_site_access", {
     description: "Generate a short-lived approval link so the user can explicitly add another official Tsumu site to the authorized list. Never use this to infer access to unapproved sites. The user must open the link and approve the site in Tsumu.",

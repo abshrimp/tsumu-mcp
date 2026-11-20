@@ -93,6 +93,13 @@ test("restore and renew rotate the cookie; origin/site mismatches cannot read an
   const nextCookie = restored.headers.get("Set-Cookie").split(";")[0];
   assert.notEqual(nextCookie, initialCookie, "the long-term credential must rotate");
 
+  const stale = await bridgeRequest(post("/bridge/renew", { siteId: "site-one" },
+    { Cookie: initialCookie }), env);
+  assert.equal(stale.status, 409, "a just-rotated secret must never rotate the grant again");
+  assert.equal(stale.headers.get("Set-Cookie"), null);
+  assert.equal((await record.storage.get("session")).resumeHash,
+    await sha256(nextCookie.split("=")[1].split(".")[1]));
+
   const updated = await record.storage.get("session");
   updated.expiresAt = Date.now() + 15_000;
   await record.storage.put("session", updated);

@@ -15,7 +15,7 @@ test("OAuth shows official-site selection first and keeps code and draft authori
   assert.match(html, /接続方法を選択してください/);
   assert.match(html, /id='official-sites' class='official-sites' hidden/);
   assert.match(html, /id='official-site-directory'/);
-  assert.match(html, /<details class='code-option'><summary>セルフホスト版の接続コードを入力<\/summary>/);
+  assert.match(html, /<details class='code-option'><summary>接続コードを入力<\/summary>/);
   assert.ok(html.indexOf("id='official-sites'") < html.indexOf("value='draft'"));
   assert.ok(html.indexOf("value='draft'") < html.indexOf("class='code-option'"),
     "self-hosted code comes after the draft-only choice");
@@ -39,7 +39,7 @@ test("unrelated or invalid cookie values do not change the official site picker"
   for (const cookie of ["tsumu_mcp_code_issued=0", "tsumu_mcp_code_issued=10", "other_tsumu_mcp_code_issued=1"]) {
     const html = consentPage(details, "handle", request(cookie), "en");
     assert.match(html, /id='official-sites'/, cookie);
-    assert.match(html, /Connect a self-hosted Tsumu site/, cookie);
+    assert.match(html, /Enter a connection code/, cookie);
   }
 });
 

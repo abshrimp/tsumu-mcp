@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bridgeRequest, redeemPairing } from "../src/bridge.js";
+import { bridgeRequest, redeemPairing, redeemPairings } from "../src/bridge.js";
 import { reconnectCookie } from "../src/bridge-cookie.js";
 
 const origin = "https://editor.example";
@@ -159,4 +159,103 @@ test("a failed revocation does not erase the browser's only retry credential", a
   assert.equal(response.status, 503);
   assert.equal(response.headers.get("Set-Cookie"), null,
     "transient errors must leave the HttpOnly cookie available for a retry");
+});
+
+
+test("partial multi-site claims are rolled back and every reusable code is restored", async () => {
+  const codes = ["ABCDEFGHJKLMNPQRSTUV", "BCDEFGHJKLMNPQRSTUV2"];
+  const ids = [
+    "12345678-1234-4234-8234-123456789abc",
+    "abcdef01-1234-4234-8234-abcdef012345",
+  ];
+  const calls = [];
+  const restored = [];
+  const expiry = Date.now() + 5 * 60_000;
+  const env = {
+    PAIRINGS: { getByName: () => ({ fetch: async (url, options) => {
+      const path = new URL(url).pathname;
+      calls.push(path);
+      const input = JSON.parse(options.body);
+      if (path === "/take-many") {
+        return Response.json({ entries: input.hashes.map((hash, i) => ({
+          hash, sessionId: ids[i], expiresAt: expiry,
+        })) });
+      }
+      if (path === "/restore") {
+        restored.push(input);
+        return Response.json({ restored: true });
+      }
+      assert.fail("Unexpected registry request " + path);
+    } }) },
+    BROWSER_SESSIONS: { getByName: id => ({ fetch: async (url, options) => {
+      const path = new URL(url).pathname;
+      calls.push(path + ":" + id);
+      const body = JSON.parse(options.body);
+      assert.match(body.claimId, /^[0-9a-f-]{36}$/);
+      if (path === "/claim") {
+        return id === ids[0]
+          ? Response.json({ siteId: "site-a", siteName: "A", canEdit: true })
+          : Response.json({ error: "Editor offline" }, { status: 410 });
+      }
+      if (path === "/release") return Response.json({ released: id === ids[0] });
+      assert.fail("Unexpected room request " + path);
+    } }) },
+  };
+  await assert.rejects(redeemPairings(env, codes, "192.0.2.1"),
+    /browser is not connected/);
+  assert.deepEqual(calls, [
+    "/take-many", "/claim:" + ids[0], "/claim:" + ids[1],
+    "/release:" + ids[0], "/restore",
+    "/release:" + ids[1], "/restore",
+  ]);
+  assert.equal(restored.length, 2);
+  assert.ok(restored.every(item => item.expiresAt === expiry));
+  assert.notEqual(restored[0].hash, restored[1].hash);
+});
+
+test("an invalid code in a multi-site grant never consumes earlier valid codes", async () => {
+  const codes = ["ABCDEFGHJKLMNPQRSTUV", "BCDEFGHJKLMNPQRSTUV2"];
+  const called = [];
+  const env = {
+    PAIRINGS: { getByName: () => ({ fetch: async url => {
+      called.push(new URL(url).pathname);
+      return Response.json({ error: "Invalid or expired code" }, { status: 400 });
+    } }) },
+    BROWSER_SESSIONS: { getByName: () => assert.fail("An invalid batch must not access any room") },
+  };
+  await assert.rejects(redeemPairings(env, codes, "192.0.2.1"), /Invalid or expired code/);
+  assert.deepEqual(called, ["/take-many"]);
+});
+
+test("a failed claim release never recreates a code for another client's authorized session", async () => {
+  const codes = ["ABCDEFGHJKLMNPQRSTUV", "BCDEFGHJKLMNPQRSTUV2"];
+  const ids = ["12345678-1234-4234-8234-123456789abc",
+    "abcdef01-1234-4234-8234-abcdef012345"];
+  const restoreIds = [];
+  const env = {
+    PAIRINGS: { getByName: () => ({ fetch: async (url, options) => {
+      const path = new URL(url).pathname;
+      const input = JSON.parse(options.body);
+      if (path === "/take-many") return Response.json({ entries: input.hashes.map((hash, i) => ({
+        hash, sessionId: ids[i], expiresAt: Date.now() + 60_000,
+      })) });
+      if (path === "/restore") {
+        restoreIds.push(input.sessionId);
+        return Response.json({ restored: true });
+      }
+      assert.fail(path);
+    } }) },
+    BROWSER_SESSIONS: { getByName: id => ({ fetch: async url => {
+      const path = new URL(url).pathname;
+      if (path === "/claim") return id === ids[0]
+        ? Response.json({ siteId: "a", siteName: "A", canEdit: true })
+        : Response.json({ error: "Offline" }, { status: 410 });
+      if (path === "/release") return id === ids[0]
+        ? Response.json({ error: "Claim belongs to another authorization" }, { status: 403 })
+        : Response.json({ released: false });
+      assert.fail(path);
+    } }) },
+  };
+  await assert.rejects(redeemPairings(env, codes, "192.0.2.1"));
+  assert.deepEqual(restoreIds, [ids[1]]);
 });

@@ -112,6 +112,33 @@ export async function bridgeRequest(request, env) {
     return Response.json({ ...data, sessionId: cookie.sessionId, pairingCode: null,
       connectToken, wsUrl: wsUrl.toString() }, { headers });
   }
+  if (url.pathname === "/bridge/attach") {
+    // An invitation comes from an already OAuth-authorized MCP client.
+    // Its recipient must still have an open editor socket and its secret.
+    if (origin !== "https://tsumu.ebii.net" ||
+        typeof input?.grantId !== "string" || !SESSION_ID.test(input.grantId) ||
+        typeof input?.ticket !== "string" ||
+        typeof input?.sessionId !== "string" || !SESSION_ID.test(input.sessionId) ||
+        typeof input?.connectToken !== "string") {
+      return bad("Invalid site invitation", 403, origin);
+    }
+    const session = await env.BROWSER_SESSIONS.getByName(input.sessionId).fetch("https://internal/attach", {
+      method: "POST", body: JSON.stringify({ connectToken: input.connectToken }),
+    });
+    if (!session.ok) return bad("The site is not connected", 403, origin);
+    const site = await session.json();
+    const result = await env.PAIRINGS.getByName("global").fetch("https://internal/grant/add", {
+      method: "POST", body: JSON.stringify({
+        grantId: input.grantId, ticket: input.ticket,
+        site: { siteId: site.siteId, siteName: site.siteName,
+          sessionId: input.sessionId, canEdit: site.canEdit },
+      }),
+    });
+    return new Response(result.body, {
+      status: result.status,
+      headers: { ...cors(origin), "Content-Type": "application/json" },
+    });
+  }
   if (url.pathname === "/bridge/revoke") {
     const siteId = input?.siteId;
     const cookie = typeof siteId === "string" ? await readReconnectCookie(request, origin, siteId) : null;

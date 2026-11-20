@@ -106,3 +106,17 @@ test("a full grant rejects an added site without consuming the invitation", asyn
   assert.equal((await call(storage, "add", { ticket: invite.ticket, site: second })).status, 400);
   assert.equal((await call(storage, "inspect", { ticket: invite.ticket })).status, 200);
 });
+
+
+test("aborted OAuth grants are removed instead of leaving orphaned site permissions", async () => {
+  const storage = memoryStorage();
+  assert.equal((await call(storage, "create", { sites: [first, second] })).status, 200);
+  assert.ok(await storage.get("grant:" + grantId));
+  const aborted = await call(storage, "abort");
+  assert.equal(aborted.status, 200);
+  assert.deepEqual(await aborted.json(), { aborted: true });
+  assert.equal(await storage.get("grant:" + grantId), undefined);
+  assert.equal((await call(storage, "list")).status, 410);
+  assert.equal((await call(storage, "abort")).status, 200,
+    "aborting an already absent grant should be idempotent");
+});

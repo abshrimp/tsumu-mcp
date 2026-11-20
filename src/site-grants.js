@@ -46,6 +46,14 @@ export async function siteGrantsRequest(storage, path, input) {
     await storage.put(key, grant);
     return noStore({ activeSiteId: grant.activeSiteId });
   }
+  if (path === "/grant/inspect") {
+    if (typeof input.ticket !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.ticket)) {
+      return noStore({ error: "Invalid invitation" }, 400);
+    }
+    const entry = await storage.get("invite:" + await sha256(input.ticket));
+    return entry?.grantId === id && entry.expiresAt > now
+      ? noStore({ valid: true }) : noStore({ error: "Invitation expired" }, 410);
+  }
   if (path === "/grant/invite") {
     const ticket = randomBridgeToken();
     await storage.put("invite:" + await sha256(ticket), {

@@ -50,7 +50,7 @@ function page() {
     createElement(tag) { return element(tag); },
   };
   runInNewContext(script, { document, window, crypto: webcrypto, Uint8Array,
-    btoa: globalThis.btoa, setTimeout, clearTimeout });
+    btoa: globalThis.btoa, setTimeout: () => 1, clearTimeout: () => {} });
   const nonce = frame.src.split("#nonce=")[1];
   assert.ok(/^[A-Za-z0-9_-]{24}$/.test(nonce));
   assert.equal(frame.src.split("#")[0], EDITOR + "/mcp/sites-bridge");

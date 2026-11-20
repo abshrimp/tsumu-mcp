@@ -2,11 +2,11 @@
 
 Use this reference when creating a **new** site with the MCP tool. `stage_site_doc` takes a full, plain JavaScript/JSON object as `doc`, not a string, ZIP archive, HTML page or compressed `doc.json` wrapper.
 
-**Authority:** The latest `abshrimp/tsumu` sources (`lib/types.ts`, `lib/presets.ts`, `lib/site-import-format.ts` and `skills/tsumu-site/references/site-doc.md`) define the actual format. This local reference is a compact starter. Consult current types for advanced scripts, motions, components and controls; never infer unsupported properties.
+**Authority:** The latest `abshrimp/tsumu` sources (`lib/types.ts`, `lib/presets.ts`, `lib/site-import-format.ts` and `skills/tsumu/references/site-doc.md`) define the actual format. This local reference is a compact starter. Consult current types for advanced scripts, motions, components and controls; never infer unsupported properties.
 
 ## Minimal structure
 
-Use [minimal-site.json](minimal-site.json) as a valid editable example. It contains a hero, title, paragraph and linked button-like element, all editable.
+Use [minimal-site.json](minimal-site.json) **only as a valid example of the SiteDoc schema**. It contains a hero, title, paragraph and linked button-like element, all editable. **It is not a site design template:** do not copy its information architecture, visual composition, copy, styles or node tree and merely change branding. First design the requested site independently (optionally as HTML/CSS), then translate that original design into native SiteDoc nodes using these references to check data shapes.
 
 ```json
 {

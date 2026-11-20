@@ -109,7 +109,7 @@ export class BrowserSession extends DurableObject {
       const connected = this.ctx.getWebSockets().some(socket =>
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
       );
-      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected });
+      return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected, origin: session.origin });
     }
     if (path === "/attach") {
       const session = await this.session();

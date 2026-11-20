@@ -57,7 +57,6 @@ label { display: block; margin-bottom: 7px; font-weight: 600; font-size: 13px; }
 .official-site-item small { margin-left: 12px; flex: none; font-size: 11px; color: var(--muted); }
 .draft-choice { margin-top: 8px; }
 .code-option { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
-.secondary-action { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
 .code-option { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 .code-option summary { width: fit-content; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; padding: 8px 0; }
 .code-content { padding-top: 14px; }

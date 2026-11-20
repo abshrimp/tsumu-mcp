@@ -80,9 +80,44 @@ export class BrowserSession extends DurableObject {
       if (!this.active(session) || session.claimed || !connected) {
         return json({ error: "This Tsumu session is unavailable or already paired" }, 410);
       }
+      if (input.claimId !== undefined &&
+          (typeof input.claimId !== "string" ||
+           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId))) {
+        return json({ error: "Invalid claim ID" }, 400);
+      }
       session.claimed = true;
+      // Only an in-flight multi-site approval can undo this provisional claim.
+      // Ordinary single-site approvals cannot be released by the batch API.
+      if (input.claimId) session.pendingClaimId = input.claimId;
       await this.ctx.storage.put("session", session);
       return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
+    }
+
+    if (path === "/release") {
+      const session = await this.session();
+      if (!session ||
+          typeof input.claimId !== "string" ||
+          !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.claimId)) {
+        return json({ error: "Invalid provisional claim" }, 400);
+      }
+      if (!session.claimed) return json({ released: false });
+      if (session.pendingClaimId !== input.claimId) {
+        return json({ error: "Claim belongs to another authorization" }, 403);
+      }
+      session.claimed = false;
+      delete session.pendingClaimId;
+      await this.ctx.storage.put("session", session);
+      return json({ released: true });
+    }
+
+    if (path === "/confirm-claim") {
+      const session = await this.session();
+      if (!session || !session.claimed || session.pendingClaimId !== input.claimId) {
+        return json({ error: "Provisional claim unavailable" }, 409);
+      }
+      delete session.pendingClaimId;
+      await this.ctx.storage.put("session", session);
+      return json({ confirmed: true });
     }
 
     if (path === "/revoke") {
@@ -106,15 +141,14 @@ export class BrowserSession extends DurableObject {
       if (!session || session.revoked || !session.claimed || session.persistentUntil <= Date.now()) {
         return json({ error: "Session no longer authorized" }, 410);
       }
-      const connected = this.ctx.getWebSockets().some(socket =>
+      const connected = this.active(session) && this.ctx.getWebSockets().some(socket =>
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
       );
       return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit, connected, origin: session.origin });
     }
     if (path === "/attach") {
       const session = await this.session();
-      if (!session || session.revoked || session.persistentUntil <= Date.now() ||
-          !session.connectionId || typeof input.connectToken !== "string" ||
+      if (!this.active(session) || !session.connectionId || typeof input.connectToken !== "string" ||
           await sha256(input.connectToken) !== session.secretHash) return json({ error: "Forbidden" }, 403);
       const connected = this.ctx.getWebSockets().some(socket =>
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId

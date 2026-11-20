@@ -81,10 +81,19 @@ export function consentPage(details, handle, request, locale) {
     "<button class='approve' type='submit' name='decision' value='approve'>" + escapeHtml(t.approve) + "</button>");
   const draftControls = form("<button class='draft' type='submit' name='decision' value='draft'>" +
     escapeHtml(t.draftOnly) + "</button>");
+  // Only display this panel once the official editor reports a nonempty
+  // same-origin site directory through a strictly scoped postMessage.
   const officialControls =
-    "<button class='approve' type='button' id='choose-official-site'>" +
-      escapeHtml(t.chooseOfficial) + "</button>" +
-    "<p class='help' id='official-site-help'>" + escapeHtml(t.chooseOfficialHelp) + "</p>" +
+    "<section id='official-sites' class='official-sites' hidden>" +
+      "<h2>" + escapeHtml(t.chooseOfficial) + "</h2>" +
+      "<label class='official-edit'><input id='official-edit' type='checkbox' checked> " +
+        escapeHtml(t.allowEdit) + "</label>" +
+      "<div id='official-site-list' class='official-site-list' role='group' aria-label='" +
+        escapeHtml(t.chooseOfficial) + "'></div>" +
+      "<p id='official-site-error' class='error' role='alert' hidden></p>" +
+    "</section>" +
+    "<iframe id='official-site-directory' title='Tsumu site directory' hidden " +
+      "referrerpolicy='no-referrer' aria-hidden='true' tabindex='-1'></iframe>" +
     "<form method='post' action='/authorize' id='official-site-authorization'>" +
       "<input type='hidden' name='handle' value='" + escapeHtml(handle) + "'>" +
       "<input type='hidden' name='lang' value='" + locale + "'>" +
@@ -92,10 +101,10 @@ export function consentPage(details, handle, request, locale) {
       "<input type='hidden' name='code' value=''>" +
     "</form>";
   const choices = officialControls +
-    "<details class='code-option'" + (hasCodeHistory ? " open" : "") + "><summary>" + escapeHtml(t.codeOption) +
-      "</summary><div class='code-content'>" + codeControls + "</div></details>" +
-    "<div class='secondary-action'><span>" + escapeHtml(t.draftHelp) + "</span>" +
-      draftControls + "</div>";
+    "<div class='draft-choice'>" + draftControls + "</div>" +
+    "<details class='code-option'" + (hasCodeHistory ? " open" : "") + "><summary>" +
+      escapeHtml(t.codeOption) + "</summary><div class='code-content'>" +
+      codeControls + "</div></details>";
 
   return layout(locale,
     "<div class='connection'>" +

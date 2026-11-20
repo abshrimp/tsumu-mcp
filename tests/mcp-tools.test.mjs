@@ -10,8 +10,8 @@ const env = {
     const path = new URL(url).pathname;
     const args = JSON.parse(init.body);
     if (path === "/grant/resolve") return Response.json({ sessionId, siteId: "demo" });
-    if (path === "/grant/list") return Response.json({ sites: [{ siteId: "demo", siteName: "Demo", sessionId, canEdit: true }], activeSiteId: "demo" });
-    if (path === "/grant/select") return args.siteId === "demo" ? Response.json({ activeSiteId: "demo" }) :
+    if (path === "/grant/list") return Response.json({ sites: [{ siteId: "demo", siteName: "Demo", sessionId, canEdit: true }], activeSiteId: "demo", activeSiteRef: sessionId });
+    if (path === "/grant/select") return args.siteId === "demo" || args.siteRef === sessionId ? Response.json({ activeSiteId: "demo", activeSiteRef: sessionId }) :
       Response.json({ error: "Site not authorized" }, { status: 403 });
     if (path === "/grant/invite") return Response.json({ ticket: "t".repeat(43), expiresAt: Date.now() + 600000 });
     return Response.json({ error: "Unexpected grant action" }, { status: 400 });
@@ -201,8 +201,8 @@ test("authenticated MCP tool call reaches the selected browser session", async (
   assert.equal(response.status, 200, body);
   assert.equal(message?.result?.content?.[0]?.type, "text", body);
   assert.deepEqual(JSON.parse(message.result.content[0].text), { sites: [
-    { id: "demo", name: "Demo", canEdit: true, connected: true, selected: true },
-  ], activeSiteId: "demo" });
+    { id: "demo", siteRef: sessionId, name: "Demo", canEdit: true, connected: true, selected: true },
+  ], activeSiteId: "demo", activeSiteRef: sessionId });
 });
 
 test("MCP tool route rejects unauthorized and invalid session contexts", async () => {
@@ -259,4 +259,35 @@ test("a missing operation name is rejected before the browser call", async () =>
   });
   assert.equal(result.message?.result?.isError, true, result.body);
   assert.match(result.message.result.content[0].text, /Invalid arguments.*operations\.0\.op/);
+});
+
+test("select_site verifies the live grant and supports unique siteRef selectors", async () => {
+  const selected = await rpc("tools/call", {
+    name: "select_site", arguments: { siteRef: sessionId },
+  });
+  assert.equal(selected.message?.result?.isError, false, selected.body);
+  assert.equal(JSON.parse(selected.message.result.content[0].text).activeSiteRef, sessionId);
+  const missing = await rpc("tools/call", {
+    name: "select_site", arguments: { siteId: "unapproved" },
+  });
+  assert.equal(missing.message?.result?.isError, true, missing.body);
+  assert.match(missing.message.result.content[0].text, /not authorized/);
+});
+
+test("revoked browser permissions are hidden and cannot be selected", async () => {
+  const revokedEnv = {
+    ...env,
+    BROWSER_SESSIONS: { getByName: () => ({
+      fetch: async () => Response.json({ error: "Session revoked" }, { status: 410 }),
+    }) },
+  };
+  const listed = await rpc("tools/call", { name: "list_sites", arguments: {} }, auth, revokedEnv);
+  assert.equal(listed.message?.result?.isError, false, listed.body);
+  assert.deepEqual(JSON.parse(listed.message.result.content[0].text),
+    { sites: [], activeSiteId: null, activeSiteRef: null });
+  const selected = await rpc("tools/call", {
+    name: "select_site", arguments: { siteId: "demo" },
+  }, auth, revokedEnv);
+  assert.equal(selected.message?.result?.isError, true, selected.body);
+  assert.match(selected.message.result.content[0].text, /revoked/);
 });

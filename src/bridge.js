@@ -166,7 +166,7 @@ export async function bridgeRequest(request, env) {
     const headers = { ...cors(origin), "Content-Type": "application/json" };
     // A stale tab may still send an old session token after another tab has
     // replaced the cookie. Preserve the newer tab's separate reconnect grant.
-    if (cookie && cookie.sessionId === sessionId) {
+    if (cookie && cookie.sessionId === sessionId && (result.ok || result.status === 410)) {
       headers["Set-Cookie"] = await clearReconnectCookie(origin, siteId);
     }
     return new Response(result.body, { status: result.status, headers });

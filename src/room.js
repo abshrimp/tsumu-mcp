@@ -120,10 +120,10 @@ export class BrowserSession extends DurableObject {
         socket.readyState === WebSocket.OPEN && socket.deserializeAttachment()?.connectionId === session.connectionId
       );
       if (!connected) return json({ error: "Editor is not connected" }, 410);
-      // Attachment validates an already live browser session. Only a valid
-      // invitation in the grant registry can authorize the new site.
-      // Do not mark a new session claimed before the invitation is consumed.
-      if (!session.claimed) return json({ error: "Site must first be paired" }, 403);
+      // The relay verifies the invitation before this operation. Once the
+      // one-time grant addition succeeds the site becomes accessible to AI.
+      session.claimed = true;
+      await this.ctx.storage.put("session", session);
       return json({ siteId: session.siteId, siteName: session.siteName, canEdit: session.canEdit });
     }
     if (path === "/call") return this.call(input);

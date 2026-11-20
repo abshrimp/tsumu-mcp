@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bridgeRequest, redeemPairing } from "../src/bridge.js";
+import { reconnectCookie } from "../src/bridge-cookie.js";
 
 const origin = "https://editor.example";
 const sessionId = "f293ab06-ab4b-446c-b8eb-70ac949eb6c6";
@@ -91,3 +92,52 @@ test("a failed browser claim restores its still-valid pairing code", async () =>
     /browser is not connected/);
   assert.deepEqual(calls, ["/take", "/claim", "/restore"]);
 });
+
+test("an old editor tab cannot revoke the newer tab's cookie session", async () => {
+  const newerSession = "12345678-1234-4234-8234-123456789abc";
+  const cookie = (await reconnectCookie(origin, "demo", newerSession, "x".repeat(43))).split(";")[0];
+  const calls = [];
+  const env = { BROWSER_SESSIONS: { getByName(id) {
+    calls.push(id);
+    return { fetch: async (_url, init) => {
+      assert.deepEqual(JSON.parse(init.body), { connectToken: credentials.connectToken });
+      return Response.json({ ok: true });
+    } };
+  } } };
+  const request = new Request("https://mcp.example/bridge/revoke", {
+    method: "POST",
+    headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ ...credentials, siteId: "demo" }),
+  });
+  const response = await bridgeRequest(request, env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [sessionId], "the explicit session, not the newer cookie, is revoked");
+  assert.equal(response.headers.get("Set-Cookie"), null,
+    "a stale tab must not erase the replacement tab's reconnect cookie");
+});
+
+test("cookie-only disconnect revokes the matching site and clears its grant", async () => {
+  const cookie = (await reconnectCookie(origin, "demo", sessionId, "x".repeat(43))).split(";")[0];
+  let calls = 0;
+  const env = { BROWSER_SESSIONS: { getByName(id) {
+    assert.equal(id, sessionId);
+    return { fetch: async (_url, init) => {
+      const data = JSON.parse(init.body);
+      assert.equal(data.origin, origin);
+      assert.equal(data.siteId, "demo");
+      assert.match(data.resumeHash, /^[a-f0-9]{64}$/);
+      calls++;
+      return Response.json({ ok: true });
+    } };
+  } } };
+  const request = new Request("https://mcp.example/bridge/revoke", {
+    method: "POST",
+    headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ siteId: "demo" }),
+  });
+  const response = await bridgeRequest(request, env);
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+  assert.match(response.headers.get("Set-Cookie"), /Max-Age=0/);
+});
+

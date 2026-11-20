@@ -1,6 +1,7 @@
 import { readLimitedText } from "./request-body.js";
 import { pairingCode, sha256 } from "./pair-code.js";
 import { allowedBrowserOrigin } from "./origin.js";
+import { randomBridgeToken, reconnectCookie, clearReconnectCookie, readReconnectCookie } from "./bridge-cookie.js";
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_BODY = 2048;
@@ -8,6 +9,7 @@ const MAX_BODY = 2048;
 function cors(origin) {
   return {
     "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "600",
@@ -58,13 +60,14 @@ export async function bridgeRequest(request, env) {
     });
     if (!quota.ok) return bad("Too many pairing requests", 429, origin);
     const sessionId = crypto.randomUUID();
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    const connectToken = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const connectToken = randomBridgeToken();
+    const resumeSecret = randomBridgeToken();
     const code = pairingCode();
     const room = env.BROWSER_SESSIONS.getByName(sessionId);
     const initialized = await room.fetch("https://internal/init", {
       method: "POST",
-      body: JSON.stringify({ siteId, siteName, canEdit: input.canEdit, secretHash: await sha256(connectToken) }),
+      body: JSON.stringify({ siteId, siteName, canEdit: input.canEdit, origin,
+        secretHash: await sha256(connectToken), resumeHash: await sha256(resumeSecret) }),
     });
     if (!initialized.ok) return bad("Unable to start session", 503, origin);
     const { expiresAt } = await initialized.json();
@@ -83,16 +86,48 @@ export async function bridgeRequest(request, env) {
       wsUrl: wsUrl.toString(),
       mcpUrl: new URL("/mcp", request.url).toString(),
       expiresAt,
-    }, { headers: cors(origin) });
+    }, { headers: { ...cors(origin), "Set-Cookie": await reconnectCookie(origin, siteId, sessionId, resumeSecret) } });
+  }
+  if (url.pathname === "/bridge/restore" || url.pathname === "/bridge/renew") {
+    const siteId = input?.siteId;
+    if (typeof siteId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(siteId)) return bad("Invalid site", 400, origin);
+    const cookie = await readReconnectCookie(request, origin, siteId);
+    if (!cookie) return bad("No reconnect permission for this site", 404, origin);
+    const nextResumeSecret = randomBridgeToken();
+    const connectToken = url.pathname === "/bridge/restore" ? randomBridgeToken() : null;
+    const result = await env.BROWSER_SESSIONS.getByName(cookie.sessionId).fetch("https://internal/" +
+      (connectToken ? "restore" : "renew"), {
+      method: "POST", body: JSON.stringify({ origin, siteId, resumeHash: await sha256(cookie.secret),
+        nextResumeHash: await sha256(nextResumeSecret),
+        ...(connectToken ? { secretHash: await sha256(connectToken) } : {}) }),
+    });
+    if (!result.ok) return bad("Reconnect permission expired, revoked, or unavailable", 403, origin);
+    const data = await result.json();
+    const headers = { ...cors(origin), "Set-Cookie": await reconnectCookie(origin, siteId, cookie.sessionId, nextResumeSecret) };
+    if (!connectToken) return Response.json(data, { headers });
+    const wsUrl = new URL(request.url);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.pathname = "/bridge/connect";
+    wsUrl.search = "?session=" + encodeURIComponent(cookie.sessionId);
+    return Response.json({ ...data, sessionId: cookie.sessionId, pairingCode: null,
+      connectToken, wsUrl: wsUrl.toString() }, { headers });
   }
   if (url.pathname === "/bridge/revoke") {
-    if (typeof input?.sessionId !== "string" || !SESSION_ID.test(input.sessionId) || typeof input.connectToken !== "string") {
-      return bad("Invalid session", 400, origin);
-    }
-    const result = await env.BROWSER_SESSIONS.getByName(input.sessionId).fetch("https://internal/revoke", {
-      method: "POST", body: JSON.stringify({ connectToken: input.connectToken }),
+    const siteId = input?.siteId;
+    const cookie = typeof siteId === "string" ? await readReconnectCookie(request, origin, siteId) : null;
+    const byToken = typeof input?.sessionId === "string" && SESSION_ID.test(input.sessionId) &&
+      typeof input.connectToken === "string";
+    if (!cookie && !byToken) return bad("Invalid session", 400, origin);
+    const sessionId = cookie?.sessionId || input.sessionId;
+    const result = await env.BROWSER_SESSIONS.getByName(sessionId).fetch("https://internal/revoke", {
+      method: "POST", body: JSON.stringify(cookie ? { origin, siteId, resumeHash: await sha256(cookie.secret) } :
+        { connectToken: input.connectToken }),
     });
-    return new Response(result.body, { status: result.status, headers: { ...cors(origin), "Content-Type": "application/json" } });
+    const headers = { ...cors(origin), "Content-Type": "application/json" };
+    if (typeof siteId === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(siteId)) {
+      headers["Set-Cookie"] = await clearReconnectCookie(origin, siteId);
+    }
+    return new Response(result.body, { status: result.status, headers });
   }
   return bad("Not found", 404, origin);
 }

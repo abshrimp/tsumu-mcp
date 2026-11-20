@@ -140,37 +140,55 @@ export class BrowserSession extends DurableObject {
         session.persistentUntil <= Date.now() ||
         input?.origin !== session.origin || input?.siteId !== session.siteId ||
         typeof input?.resumeHash !== "string") return false;
-    return input.resumeHash === session.resumeHash ||
-      (input.resumeHash === session.previousResumeHash && session.previousResumeUntil > Date.now());
+    return input.resumeHash === session.resumeHash;
   }
 
   async restoreOrRenew(path, input) {
-    const session = await this.session();
-    if (!this.validResume(session, input) ||
-        typeof input.nextResumeHash !== "string" || !/^[a-f0-9]{64}$/.test(input.nextResumeHash) ||
-        (path === "/restore" && (typeof input.secretHash !== "string" || !/^[a-f0-9]{64}$/.test(input.secretHash)))) {
-      return json({ error: "Reconnect permission expired, revoked, or unavailable" }, 403);
+    if (typeof input?.nextResumeHash !== "string" || !/^[a-f0-9]{64}$/.test(input.nextResumeHash) ||
+        (path === "/restore" && (typeof input.secretHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(input.secretHash)))) {
+      return json({ error: "Invalid reconnect request" }, 400);
     }
-    const now = Date.now();
-    session.previousResumeHash = session.resumeHash;
-    session.previousResumeUntil = now + 30_000;
-    session.resumeHash = input.nextResumeHash;
-    session.persistentUntil = now + RECONNECT_IDLE_MS;
-    session.expiresAt = now + ACTIVE_SESSION_MS;
-    if (path === "/restore") {
-      session.secretHash = input.secretHash;
-      session.connectionId = null;
-    }
-    await this.ctx.storage.put("session", session);
-    await this.scheduleCleanup(session.expiresAt);
+    // Durable Object requests can interleave at storage awaits. Rotate grants
+    // inside one transaction to prevent two simultaneous renewals from both
+    // committing changes based on a stale session snapshot.
+    const outcome = await this.ctx.storage.transaction(async txn => {
+      const session = await txn.get("session");
+      if (!this.validResume(session, input)) {
+        const stale = session && !session.revoked &&
+          session.origin === input?.origin && session.siteId === input?.siteId &&
+          session.persistentUntil > Date.now() &&
+          input?.resumeHash === session.previousResumeHash &&
+          session.previousResumeUntil > Date.now();
+        return { status: stale ? 409 : 403, error: stale
+          ? "Reconnect credential was rotated by another request"
+          : "Reconnect permission expired, revoked, or unavailable" };
+      }
+      const now = Date.now();
+      session.previousResumeHash = session.resumeHash;
+      session.previousResumeUntil = now + 30_000;
+      session.resumeHash = input.nextResumeHash;
+      session.persistentUntil = now + RECONNECT_IDLE_MS;
+      session.expiresAt = now + ACTIVE_SESSION_MS;
+      if (path === "/restore") {
+        session.secretHash = input.secretHash;
+        session.connectionId = null;
+      }
+      await txn.put("session", session);
+      return { session };
+    });
+    if (!outcome.session) return json({ error: outcome.error }, outcome.status);
+    await this.scheduleCleanup(outcome.session.expiresAt);
     if (path === "/restore") {
       for (const socket of this.ctx.getWebSockets()) {
         this.failSocket(socket);
         socket.close(1000, "Replaced");
       }
     }
-    return json({ siteId: session.siteId, canEdit: session.canEdit, expiresAt: session.expiresAt,
-      persistentUntil: session.persistentUntil });
+    return json({
+      siteId: outcome.session.siteId, canEdit: outcome.session.canEdit,
+      expiresAt: outcome.session.expiresAt, persistentUntil: outcome.session.persistentUntil,
+    });
   }
 
   async connect(request) {

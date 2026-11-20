@@ -15,7 +15,7 @@ A standalone remote Model Context Protocol (MCP) server for [Tsumu](https://gith
 - **Runtime:** Cloudflare Workers, Durable Objects for browser sessions and one-time pairing, Workers KV for OAuth tokens and grants.
 - **Transport:** Streamable HTTP with OAuth 2.1 authorization-code / PKCE.
 - **Data:** The MCP server does **not** persist or mirror paired-site documents. It relays live edits to the paired Tsumu tab. Separately, an explicitly staged **new** SiteDoc can be held in an expiring, single-use Durable Object until the user opens its import URL and the editor confirms saving it.
-- **Permission:** One active browser/site per pairing; read-only or read/edit, selected in Tsumu. No publishing or asset deletion.
+- **Permission:** Each AI grant contains only explicitly approved sites; each site is read-only or read/edit. No publishing or asset deletion.
 
 ## Connect
 
@@ -34,12 +34,12 @@ A staged draft expires after one hour and is deleted after the editor confirms t
 
 ### Read or edit an existing site
 
-1. Open the desired site in Tsumu (at https://tsumu.ebii.net or a self-hosted editor).
-2. Open the editor's **MCP connection** menu (Japanese: **AIと接続（MCP）**), choose read-only or read/edit and start the connection.
-3. Add the MCP endpoint to your AI client, then inspect the client identity and redirect host on the OAuth consent page. Enter the **single-use connection code** shown in Tsumu.
-4. Keep that editor tab open. The browser session expires after one hour and the connection code after ten minutes. You can revoke the browser session immediately with **Disconnect and revoke**.
+1. In the AI app, start OAuth for the MCP endpoint.
+2. For the official editor, select one of your sites directly on the MCP authorization page. Only non-secret site names and IDs are shared from Tsumu in the browser. If no sites are available, the site list is hidden.
+3. For a self-hosted editor, open **AIと接続（MCP）**, issue a code and enter it under **Connect a self-hosted Tsumu site** (below **Allow new-site creation only**).
+4. Keep the editor tab open to edit. Connection permissions survive a browser restart for up to seven days of inactivity; active one-hour sessions renew automatically. Revoke permission from the editor when finished.
 
-A connection authorizes **only the paired site** and does not automatically follow newly created sites. Do not share connection codes.
+The tools `list_sites` and `select_site` switch only between **explicitly approved sites**. `request_site_access` provides a separate one-time approval link for adding another site. A new site is not automatically granted. Do not share connection codes or approval links.
 
 ## AI client plugins and distribution
 

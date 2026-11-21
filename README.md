@@ -95,7 +95,7 @@ npm run build
 npm run deploy
 ~~~
 
-Configure the Worker's HTTPS domain in Cloudflare. The OAuth `RESOURCE` and `ISSUER` in `src/index.js` must match that domain; this repository configures **mcp.tsumu.ebii.net**. Set both values for your deployment before distributing its endpoint. Keep client manifests, guide URLs and distribution checks consistent with that endpoint.
+Configure the Worker's HTTPS domain in Cloudflare. The OAuth `RESOURCE` in `src/mcp-metadata.js` must match that domain; `ISSUER` is derived from its origin. This repository configures **mcp.tsumu.ebii.net**. Set the resource URL for your deployment before distributing its endpoint. Keep client manifests, guide URLs and distribution checks consistent with that endpoint.
 
 To connect a self-hosted Tsumu instance to the public MCP server, build the editor with NEXT_PUBLIC_TSUMU_MCP_URL=https://mcp.tsumu.ebii.net (or point it to your own MCP deployment). You do not need to register your editor's hostname with the MCP server. Use HTTPS for remotely hosted editors; HTTP is accepted only on the loopback hosts listed above.
 

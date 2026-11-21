@@ -25,7 +25,7 @@ test("GET / serves the complete standalone user-supplied guide", () => {
     assert.ok(existsSync(new URL("../public/landing/assets/" + path, import.meta.url)));
   }
   assert.match(html, /https:\/\/github\.com\/abshrimp\/tsumu-mcp\/blob\/main\/docs\/PRIVACY\.md/);
-  assert.match(html, /data-i18n="footerPrivacy">プライバシーポリシー</span>/);
+  assert.ok(html.includes('data-i18n="footerPrivacy">プライバシーポリシー</span>'));
   assert.match(html, /footerPrivacy: "Privacy Policy"/);
   assert.ok(html.includes('docs/PRIVACY.md"><svg class="gh"'), "privacy link includes GitHub icon");
   assert.match(html, /https:\/\/mcp\.tsumu\.ebii\.net\/mcp/);

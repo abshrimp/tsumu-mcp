@@ -42,6 +42,8 @@ a { color: var(--accent); }
 .destination-icon { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 13px; flex: none; }
 .destination-icon .brand-mark { width: 34px; height: 34px; }
 h1 { margin: 0 0 12px; font-size: 22px; font-weight: 650; line-height: 1.4; letter-spacing: -.02em; }
+/* Separate the request header from the site-selection controls without adding text. */
+.connection + h1 { padding-bottom: 9px; border-bottom: 1px solid var(--border); }
 
 label { display: block; margin-bottom: 7px; font-weight: 600; font-size: 13px; }
 .code { display: block; width: 100%; height: 46px; border-radius: 9px; border: 1px solid #cbd5e1; background: #fff; padding: 10px 12px; color: var(--text); font: 500 15px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: .05em; }
@@ -62,10 +64,12 @@ label { display: block; margin-bottom: 7px; font-weight: 600; font-size: 13px; }
 .official-site-checkbox { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .official-site-item strong { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
 .official-site-item small { flex: none; font-size: 11px; color: var(--muted); }
-.official-edit { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; font-size: 12px; color: var(--muted); }
+.official-edit { display: flex; align-items: center; gap: 8px; margin: 10px 0 12px; font-size: 12px; color: var(--muted); }
 .official-edit input { margin: 0; accent-color: var(--accent); }
 .approve:disabled { opacity: .5; cursor: not-allowed; }
+/* Distinguish the alternative new-site grant only when a site list exists. */
 .draft-choice { margin-top: 6px; }
+.official-sites:not([hidden]) ~ .draft-choice { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .code-option { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 .code-option summary { width: fit-content; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; padding: 6px 0; }
 .code-content { padding-top: 12px; }

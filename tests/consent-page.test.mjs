@@ -112,6 +112,21 @@ test("new-site consent has an outlined blue button at the same size as regular c
   assert.ok(consentStyles.includes(".draft:hover { background: #edf4ff; }"));
 });
 
+test("the minimal consent has section dividers without additional headings", () => {
+  const japanese = consentPage(details, "handle", request(), "ja");
+  const english = consentPage(details, "handle", request(), "en");
+  for (const html of [japanese, english]) {
+    assert.match(html, /<div class='connection'>[\s\S]*?<h1>/);
+    assert.match(html, /id='official-sites' class='official-sites' hidden/);
+    assert.match(html, /class='draft-choice'/);
+    assert.doesNotMatch(html, /class='consent-heading'|class='option-heading'|class='intro'/);
+  }
+  assert.match(consentStyles, /\.connection \+ h1 \{[^}]*border-bottom: 1px solid var\(--border\)/);
+  assert.match(consentStyles, /\.official-sites:not\(\[hidden\]\) ~ \.draft-choice \{[^}]*border-top: 1px solid var\(--border\)/);
+  assert.match(consentStyles, /\.official-site-list \{[^}]*max-height: clamp\(120px, calc\(100dvh - 460px\), 320px\)/);
+  assert.match(consentStyles, /\.code-option \{[^}]*border-top: 1px solid var\(--border\)/);
+});
+
 test("expanded connection code and details scroll inside the desktop consent card", () => {
   assert.ok(consentStyles.includes("max-height: calc(100dvh - 32px); min-height: 0; overflow: visible;"));
   assert.match(consentStyles, /\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow-y: auto;/);

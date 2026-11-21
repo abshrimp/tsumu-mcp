@@ -12,7 +12,8 @@ const request = (cookie = "") => new Request("https://mcp.tsumu.ebii.net/authori
 
 test("OAuth shows a compact multi-select site panel without the repeated site heading", () => {
   const html = consentPage(details, "opaque-handle", request(), "ja");
-  assert.match(html, /接続するサイトを選択してください。/);
+  assert.match(html, /<p class='site-heading'>サイトを選択<\/p>/);
+  assert.doesNotMatch(html, /<p class='intro'>|<div class='option-heading'>/);
   assert.doesNotMatch(html, /<h2>サイトを選択<\/h2>/);
   assert.match(html, /id='official-sites' class='official-sites' hidden/);
   assert.match(html, /id='official-site-list'/);

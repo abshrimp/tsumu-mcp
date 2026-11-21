@@ -63,11 +63,13 @@ test("the manual guide gives every client setup steps with the MCP URL", () => {
     assert.match(html, /id='new-site'/);
     assert.match(html, /id='edit-site'/);
     for (const { id } of PLUGIN_CLIENTS) {
-      assert.match(html, new RegExp("<article class='client' id='app-" + id + "'"));
+      assert.match(html, new RegExp("<details class='setup-client' id='app-" + id + "'"));
       assert.ok(manualGuideMessages[locale].clients[id].steps.length >= 2, "steps for " + id);
     }
-    assert.match(html, /&#34;serverUrl&#34;/, "Antigravity uses serverUrl");
-    assert.match(html, /gemini mcp add --transport http/);
+    assert.match(html, /id='app-vscode'/, "VS Code has a setup accordion");
+    assert.match(html, /id='app-claude-code'/, "Claude Code has a setup accordion");
+    assert.match(html, /id='app-codex'/, "Codex has a setup accordion");
+    assert.match(html, /gemini mcp add --scope user --transport http/);
     assert.doesNotMatch(html, /data-plugin=/, "no plugin buttons in manual mode");
     for (const path of [...html.matchAll(/src='(\/guide\/[^']+)'/g)].map(match => match[1])) {
       assert.ok(existsSync(new URL("../public" + path, import.meta.url)), "missing screenshot " + path);

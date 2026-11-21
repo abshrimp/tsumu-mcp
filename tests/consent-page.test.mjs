@@ -33,6 +33,8 @@ test("the compact page preserves both consent choices and language switching", (
   const japanese = consentPage(details, "opaque-handle", request("&lang=ja"), "ja");
   assert.match(japanese, /<html lang='ja'>/);
   assert.match(japanese, /Tsumuへの接続/);
+  assert.match(japanese, /既存のサイトを接続/);
+  assert.match(japanese, /新しいサイトを作成/);
   assert.match(japanese, /接続コード/);
   assert.match(japanese, /接続を許可/);
   assert.match(japanese, /新規サイトの作成のみ許可/);
@@ -68,6 +70,29 @@ test("show a trusted client icon only for a recognized domain", () => {
   const cursor = consentPage({ ...details, clientName: "Cursor", clientDomain: "cursor.com" }, "id", request(), "en");
   assert.ok(cursor.includes("src='/plugin-icons/cursor.svg'"));
 
+  const vscode = consentPage({ ...details, clientName: "Visual Studio Code", clientDomain: "vscode.dev" }, "id", request(), "en");
+  assert.ok(vscode.includes("src='/plugin-icons/vscode.svg'"));
+  assert.match(vscode, /Verified domain: vscode.dev/);
+  const cursorCallback = consentPage({
+    ...details, clientName: "Cursor", clientDomain: null, redirectHost: "www.cursor.com",
+    redirectUri: "https://www.cursor.com/agents/mcp/oauth/callback",
+  }, "id", request(), "ja");
+  assert.ok(cursorCallback.includes("src='/plugin-icons/cursor.svg'"));
+  assert.match(cursorCallback, /移動先.*www.cursor.com.*提供元は未検証/);
+
+  for (const modified of [
+    { redirectUri: "https://www.cursor.com.evil.example/agents/mcp/oauth/callback" },
+    { redirectUri: "https://www.cursor.com/agents/mcp/oauth/callback/extra" },
+    { redirectUri: "http://www.cursor.com/agents/mcp/oauth/callback" },
+    { clientName: "Impersonator" },
+  ]) {
+    const spoofed = consentPage({
+      ...details, clientName: "Cursor", clientDomain: null, redirectHost: "www.cursor.com",
+      redirectUri: "https://www.cursor.com/agents/mcp/oauth/callback", ...modified,
+    }, "id", request(), "en");
+    assert.doesNotMatch(spoofed, /src='\/plugin-icons\/cursor.svg'/);
+  }
+
   const unknown = consentPage({ ...details, clientName: "ChatGPT", clientDomain: "example.net" }, "id", request(), "en");
   assert.doesNotMatch(unknown, /<img src=/);
   assert.match(unknown, /client-icon-fallback/);
@@ -89,7 +114,7 @@ test("expanded connection code and details scroll inside the desktop consent car
   assert.ok(consentStyles.includes("max-height: calc(100dvh - 32px); min-height: 0; overflow: visible;"));
   assert.match(consentStyles, /\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow-y: auto;/);
   assert.match(consentStyles, /\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow-y: auto;\s*overscroll-behavior: contain;/);
-  assert.ok(consentStyles.includes("max-height: clamp(96px, 23dvh, 220px); overflow-y: auto;"),
+  assert.ok(consentStyles.includes("max-height: clamp(96px, 19dvh, 180px); overflow-y: auto;"),
     "site selection remains independently scrollable while both details panels are closed");
   assert.match(consentStyles, /@media \(max-width: 520px\)[\s\S]*\.card:has\(\.code-option\[open\]\), \.card:has\(\.details\[open\]\)\s*\{\s*overflow: visible;/,
     "mobile layouts must use ordinary page scrolling rather than nested modal scrolling");

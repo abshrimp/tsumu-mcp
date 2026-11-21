@@ -34,7 +34,7 @@ export async function authorize(request, env) {
       const details = await oauth.describeConsent(authRequest);
       const csp = consentCsp(authRequest.redirectUri);
       const consent = await oauth.beginConsent(authRequest);
-      return new Response(consentPage(details, consent.handle, request, locale), {
+      return new Response(consentPage({ ...details, redirectUri: authRequest.redirectUri }, consent.handle, request, locale), {
         headers: htmlHeaders(consent.headers, csp),
       });
     }

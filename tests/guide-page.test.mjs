@@ -27,7 +27,7 @@ test("GET / serves the complete standalone user-supplied guide", () => {
   assert.match(html, /https:\/\/github\.com\/abshrimp\/tsumu-mcp\/blob\/main\/docs\/PRIVACY\.md/);
   assert.match(html, /data-i18n="footerPrivacy">プライバシーポリシー</span>/);
   assert.match(html, /footerPrivacy: "Privacy Policy"/);
-  assert.match(html, /docs/PRIVACY\.md"><svg class="gh"/);
+  assert.ok(html.includes('docs/PRIVACY.md"><svg class="gh"'), "privacy link includes GitHub icon");
   assert.match(html, /https:\/\/mcp\.tsumu\.ebii\.net\/mcp/);
   assert.doesNotMatch(html, /class='setup-client'/, "old composed guide is not included");
 });

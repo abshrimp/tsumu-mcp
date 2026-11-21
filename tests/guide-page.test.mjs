@@ -34,7 +34,8 @@ test("landing response keeps original inline script under hash-based CSP", async
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.equal(response.headers.get("content-security-policy"), guideCsp);
   assert.match(guideCsp, /script-src 'sha256-/);
-  assert.doesNotMatch(guideCsp, /unsafe-eval|unsafe-inline'(?=;.*img-src)/);
+  assert.doesNotMatch(guideCsp, /unsafe-eval/);
+  assert.doesNotMatch(guideCsp, /script-src[^;]*'unsafe-inline'/);
   assert.equal(await response.text(), guidePage());
   const head = guideResponse(undefined, "HEAD");
   assert.equal(head.body, null);

@@ -71,10 +71,7 @@ export function consentPage(details, handle, request, locale) {
   const t = consentMessages[locale];
   const identity = details.clientDomain
     ? escapeHtml(t.verifiedDomain) + escapeHtml(details.clientDomain)
-    : isCursorCallback(details)
-      ? escapeHtml(t.redirect) + ": " + escapeHtml(details.redirectHost) +
-        " · " + escapeHtml(t.unverifiedShort)
-      : escapeHtml(t.unverifiedDomain);
+    : escapeHtml(t.unverifiedShort);
   const scopes = details.scope.map(scope => "<li>" + escapeHtml(scope) + "</li>").join("");
   const loopback = details.redirectIsLoopback
     ? "<p class='loopback'>" + escapeHtml(t.loopback) + "</p>" : "";
@@ -93,8 +90,7 @@ export function consentPage(details, handle, request, locale) {
   // same-origin site directory through a strictly scoped postMessage.
   const officialControls =
     "<section id='official-sites' class='official-sites' hidden>" +
-      "<div class='option-heading'><strong>" + escapeHtml(t.existingSite) + "</strong>" +
-        "<span>" + escapeHtml(t.chooseOfficial) + "</span></div>" +
+      "<p class='site-heading'>" + escapeHtml(t.chooseOfficial) + "</p>" +
       "<form method='post' action='/authorize' id='official-site-authorization'>" +
         "<input type='hidden' name='handle' value='" + escapeHtml(handle) + "'>" +
         "<input type='hidden' name='lang' value='" + locale + "'>" +
@@ -112,23 +108,19 @@ export function consentPage(details, handle, request, locale) {
     "<iframe id='official-site-directory' title='Tsumu site directory' hidden " +
       "referrerpolicy='no-referrer' aria-hidden='true' tabindex='-1'></iframe>";
   const choices = officialControls +
-    "<div class='draft-choice'>" +
-      "<div class='option-heading'><strong>" + escapeHtml(t.newSite) + "</strong>" +
-        "<span>" + escapeHtml(t.newSiteHelp) + "</span></div>" +
-      draftControls + "</div>" +
+    "<div class='draft-choice'>" + draftControls + "</div>" +
     "<details class='code-option'><summary>" +
       escapeHtml(t.codeOption) + "</summary><div class='code-content'>" +
       codeControls + "</div></details>";
 
   return layout(locale,
-    "<div class='consent-heading'><h1>" + escapeHtml(t.title) + "</h1>" +
-      "<p class='intro'>" + escapeHtml(t.intro) + "</p></div>" +
     "<div class='connection'>" +
       "<div class='client-identity'>" + clientIcon(details) +
         "<div class='client-text'><strong>" + escapeHtml(details.clientName) +
         "</strong><span>" + identity + "</span></div></div>" +
       "<svg class='connection-arrow' viewBox='0 0 24 24' aria-hidden='true'><path d='M4 12h16m-6-6 6 6-6 6'/></svg>" +
       "<span class='destination-icon' aria-label='Tsumu'>" + brand + "</span></div>" +
+    "<h1>" + escapeHtml(t.title) + "</h1>" +
     choices + form("<button class='deny' type='submit' name='decision' value='deny'>" + escapeHtml(t.deny) + "</button>") +
     "<details class='details'><summary>" + escapeHtml(t.details) + "</summary>" +
       "<dl><div><dt>" + escapeHtml(t.redirect) + "</dt><dd>" + escapeHtml(details.redirectHost) + "</dd></div>" +

@@ -121,6 +121,8 @@ test("multiple sites need explicit selection and are claimed only after every ed
   assert.equal(ui.section.hidden, false);
   assert.equal(ui.list.children.length, 2);
   assert.equal(ui.list.children[0].children[1].textContent, name);
+  assert.equal(ui.list.children[0].children.length, 2, "editable sites need no repeated status labels");
+  assert.equal(ui.list.children[1].children[2].textContent, "閲覧のみ", "read-only exceptions remain visible");
   assert.equal(ui.opened.length, 0);
   assert.equal(ui.approve.disabled, true);
   ui.choose(0);

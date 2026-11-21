@@ -68,10 +68,10 @@
       input.className = "official-site-checkbox";
       const name = document.createElement("strong");
       name.textContent = site.name.slice(0, 120);
-      const access = document.createElement("small");
-      access.textContent = site.canEdit
-        ? message("編集可能", "Can edit")
-        : message("閲覧のみ", "Read only");
+      // The global editing checkbox covers editable sites; only exceptions
+      // need a per-site label.
+      const access = !site.canEdit ? document.createElement("small") : null;
+      if (access) access.textContent = message("閲覧のみ", "Read only");
       input.addEventListener("change", () => {
         if (input.checked && selected.size >= maxSites) {
           input.checked = false;
@@ -83,7 +83,8 @@
         errorBox.hidden = true;
         approve.disabled = selected.size === 0;
       });
-      label.append(input, name, access);
+      label.append(input, name);
+      if (access) label.append(access);
       list.append(label);
     }
   }

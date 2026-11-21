@@ -3,6 +3,7 @@
  * The final import is still checked independently by Tsumu itself.
  */
 import { checkNodeFields, checkPageFields, checkAssetFields, isDocumentId } from "./site-doc-shapes.js";
+import { checkScriptTargetReferences } from "./script-target-check.js";
 
 const NODE_TYPES = new Set(["box", "image", "divider", "code", "instance", "icon", "field", "media", "embed", "list"]);
 const STATE = /^(?:default|hover|active|focus|custom:[a-zA-Z0-9_ -]{1,40})$/;
@@ -232,6 +233,7 @@ export function checkStagedSiteDoc(doc) {
     }
   }
   checkForest(doc);
+  checkScriptTargetReferences(doc, invalid);
   checkOptions(doc);
   if (Object.keys(doc.nodes).length >= 4 && styleDeclarations === 0) {
     invalid("nodes.*.styles", "multiple editable elements have no CSS declarations, so the requested visual design will not appear");

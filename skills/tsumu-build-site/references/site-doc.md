@@ -81,6 +81,15 @@ A top-level `style`, `css`, `className`, or a flat `styles: { backgroundColor: .
 - Scripts and animations are native Tsumu editor data, not arbitrary webpage JavaScript. Their shapes can change. Only create these fields after reading the exact current `ScriptStep` / motion types, and use real IDs and correct triggers. Never present decorative animation as a functional form, or a fake call-to-action as working behavior.
 - Do not embed credentials, secret API keys or private information in shareable site data.
 
+
+### Script target IDs must be HTML `attrId` values
+
+A script block's `target` is **not** the ID used as the key in `nodes`. It refers to the target element's HTML `id` attribute, stored as `nodes[<node-id>].attrId`. These are separate identifiers. Always assign a unique `attrId` to an element before referencing it in `show`, `hide`, `toggle`, `scroll-to`, `set-state`, `set-value`, `set-enabled`, or an `if` condition with an element subject (`value`, `checked`, `visible`, `hovered`).
+
+For example, `nodes.hero_panel` with `"id": "hero_panel"` and `"attrId": "details"` is referenced as `{ "id": "step_show", "kind": "show", "target": "details" }`, **not** `"target": "hero_panel"`. The target must be reachable on the same page or within the reusable component owning the script. A script attached to an element may use `"target": "@self"` to target its own triggering element; a page-level script may not. A variable-only `if` condition uses `"subject": "var"` and `"target": ""`.
+
+Check nested steps in `if`, `repeat` and `for-each`, including every joined `if` condition and every alternate branch. `stage_site_doc` validates these references and returns an actionable path if one does not resolve; correct the SiteDoc and retry rather than ignoring the error. Do not create nonfunctional scripts or guess target IDs.
+
 ## Checks before calling the tool
 
 1. Confirm that the user requested a **new** site (an existing-site update belongs to `tsumu-edit-site`).

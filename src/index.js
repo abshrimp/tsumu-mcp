@@ -7,13 +7,11 @@ import { guideResponse } from "./guide-page.js";
 import { pluginCatalogResponse } from "./guide-links.js";
 import { consentLocale } from "./consent-locales.js";
 import { serveAuthenticatedMcp } from "./mcp-handler.js";
+import { RESOURCE, ISSUER } from "./mcp-metadata.js";
 
 export { PairingRegistry } from "./pairings.js";
 export { ImportDraft } from "./import-draft.js";
 export { BrowserSession } from "./room.js";
-
-const RESOURCE = "https://mcp.tsumu.ebii.net/mcp";
-const ISSUER = "https://mcp.tsumu.ebii.net";
 
 const defaultHandler = {
   async fetch(request, env) {

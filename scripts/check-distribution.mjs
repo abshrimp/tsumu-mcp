@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+import { RESOURCE, ISSUER } from "../src/mcp-metadata.js";
 
 const read = path => JSON.parse(readFileSync(new URL("../" + path, import.meta.url), "utf8"));
 const endpoint = "https://mcp.tsumu.ebii.net/mcp";
+assert.equal(RESOURCE, endpoint, "MCP resource metadata must exactly match the production endpoint");
+assert.equal(ISSUER, new URL(endpoint).origin, "OAuth issuer must match the production endpoint origin");
 const version = read("package.json").version;
 const lockfile = read("package-lock.json");
 assert.equal(lockfile.version, version, "Lockfile version must match package.json");
@@ -58,8 +61,6 @@ assert.equal(antigravity["$schema"], "https://antigravity.google/schemas/v1/plug
 for (const path of ["README.md", "docs/INSTALL.md", "docs/PUBLISHING.md"]) {
   assert.ok(existsSync(new URL("../" + path, import.meta.url)), "Missing documentation: " + path);
 }
-const indexSource = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
-assert.ok(indexSource.includes(endpoint), "MCP URI does not match production resource metadata");
 const serverSource = readFileSync(new URL("../src/mcp.js", import.meta.url), "utf8");
 assert.ok(serverSource.includes(`new McpServer({ name: "tsumu", version: "${version}" })`),
   "MCP server version must match package.json");

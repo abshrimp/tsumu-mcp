@@ -19,7 +19,7 @@ A standalone remote Model Context Protocol (MCP) server for [Tsumu](https://gith
 
 ## Connect
 
-A bilingual (Japanese/English) step-by-step guide is served at **https://mcp.tsumu.ebii.net/**. It follows the browser's language by default; `?lang=ja` or `?lang=en` selects one explicitly.
+A bilingual (Japanese/English) step-by-step guide is served at **https://mcp.tsumu.ebii.net/**. It follows an explicitly selected language, then the saved choice, then the browser language.
 
 Use the remote MCP endpoint `https://mcp.tsumu.ebii.net/mcp` with an AI client that supports authenticated Streamable HTTP.
 
@@ -43,16 +43,13 @@ The tools `list_sites` and `select_site` switch only between **explicitly approv
 
 ## AI client setup and plugin distribution
 
-The [connection guide](https://mcp.tsumu.ebii.net/) is currently in **manual setup** mode. It presents collapsible instructions for ChatGPT, Claude, Cursor, GitHub Copilot / VS Code, Claude Code, OpenAI Codex and Gemini CLI, followed by the shared Tsumu authorization flow. Japanese and English are available via the guide's language links or `?lang=ja` / `?lang=en`. The primary remote endpoint is `https://mcp.tsumu.ebii.net/mcp`.
+The homepage at **https://mcp.tsumu.ebii.net/** serves the standalone connection guide from `src/landing-html.js`. Its HTML, CSS and client-side language switcher come from the supplied connection guide; screenshots and icons are bundled under `public/landing/assets/`. The only HTML changes are deployment asset paths and the retained [Privacy Policy](docs/PRIVACY.md) footer link. Use `?lang=ja` or `?lang=en` to select a language; otherwise the guide checks a previously selected language and then the browser's language.
 
-The implementation lives in `src/guide-page.js` and `src/guide-style.js`. `src/guide-links.js` controls whether the landing page shows manual instructions or public plugin listings:
+The guide documents connecting ChatGPT, Claude, Cursor, GitHub Copilot / VS Code, Claude Code, OpenAI Codex and Gemini CLI to the remote MCP endpoint `https://mcp.tsumu.ebii.net/mcp`. It also covers creating a new site and granting access to an existing site. OAuth and MCP endpoints are independent from the homepage.
 
-- `GUIDE_MODE = "manual"`: built-in, client-specific connection instructions; this is the current setting.
-- `GUIDE_MODE = "plugins"`: links to published plugins, only after valid public URLs have been configured in `pluginLinks`.
+The separate `/plugins.json` endpoint lists **only** published plugin entries with configured HTTPS URLs in `src/guide-links.js`. Showing setup instructions on the homepage does not imply an AI provider has approved or listed Tsumu in a curated marketplace.
 
-The `/plugins.json` endpoint is a separate machine-readable catalog. It contains **only** plugin entries with configured HTTPS URLs; it does not list every client supported through manual MCP configuration. The Tsumu editor uses it to display approved plugin links. Adding an unpublished or local-only client to the manual guide does not publish it to the catalog.
-
-For distribution packaging, this repository includes a Claude plugin under [`plugins/claude`](plugins/claude), a Cursor manifest, a Gemini CLI extension and an Antigravity manifest. Presence in the repository does not imply approval or listing by the respective providers. See [installation instructions](docs/INSTALL.md) and [publishing checklist](docs/PUBLISHING.md).
+Repository distributions include a Claude plugin under [`plugins/claude`](plugins/claude), a Cursor manifest, a Gemini CLI extension and an Antigravity manifest. See [installation instructions](docs/INSTALL.md) and [publishing checklist](docs/PUBLISHING.md).
 
 
 ## Skills and site drafts

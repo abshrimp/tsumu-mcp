@@ -19,7 +19,7 @@ A standalone remote Model Context Protocol (MCP) server for [Tsumu](https://gith
 
 ## Connect
 
-A bilingual (Japanese/English) step-by-step guide with screenshots is served at **https://mcp.tsumu.ebii.net/**. It follows the browser's language by default; `?lang=ja` or `?lang=en` selects one explicitly.
+A bilingual (Japanese/English) step-by-step guide is served at **https://mcp.tsumu.ebii.net/**. It follows the browser's language by default; `?lang=ja` or `?lang=en` selects one explicitly.
 
 Use the remote MCP endpoint `https://mcp.tsumu.ebii.net/mcp` with an AI client that supports authenticated Streamable HTTP.
 
@@ -41,19 +41,19 @@ A staged draft expires after one hour and is deleted after the editor confirms t
 
 The tools `list_sites` and `select_site` switch only between **explicitly approved sites**. If a selected editor is offline, the AI client receives a URL and an instruction to ask the user to open that site in their authorized browser before trying again. `request_site_access` provides a separate one-time approval link for adding another site. A new site is not automatically granted. Do not share connection codes or approval links.
 
-## AI client plugins and distribution
+## AI client setup and plugin distribution
 
-The guide at `/` has two versions, chosen by `GUIDE_MODE` in [`src/guide-links.js`](src/guide-links.js): `"manual"` (step-by-step manual MCP setup for each client, with screenshots in `public/guide/apps/`) while the plugin listings are under review, and `"plugins"` (one plugin link per client, no manual setup). Both stay in the code, so switching is a one-line change. Plugin listing URLs live in the same file; set each `https://` URL once its listing is public, then switch `GUIDE_MODE` to `"plugins"`. Published plugins (with icons) are also listed at `/plugins.json`, which the Tsumu editor reads to show plugin links in its MCP connection dialog, so the editor needs no redeploy. Client icons are bundled in `public/plugin-icons/` (see its NOTICE).
+The [connection guide](https://mcp.tsumu.ebii.net/) is currently in **manual setup** mode. It presents collapsible instructions for ChatGPT, Claude, Cursor, GitHub Copilot / VS Code, Claude Code, OpenAI Codex and Gemini CLI, followed by the shared Tsumu authorization flow. Japanese and English are available via the guide's language links or `?lang=ja` / `?lang=en`. The primary remote endpoint is `https://mcp.tsumu.ebii.net/mcp`.
 
-The OAuth-protected remote MCP endpoint supports these AI clients:
+The implementation lives in `src/guide-page.js` and `src/guide-style.js`. `src/guide-links.js` controls whether the landing page shows manual instructions or public plugin listings:
 
-- **ChatGPT / Codex:** add the remote MCP URL as a custom plugin; public directory publication requires a reviewed submission.
-- **Claude / Claude Code:** install from the GitHub marketplace `abshrimp/tsumu-mcp` (`tsumu@tsumu-plugins`); the entry points to the [self-contained, dependency-free Claude plugin folder](plugins/claude), which includes all three Skills and remote MCP configuration. For official directory submission, the same isolated folder is used.
-- **Cursor:** plugin manifest and remote `mcp.json`.
-- **Gemini CLI:** installable GitHub extension (`gemini-extension.json`).
-- **Google Antigravity:** plugin manifest and `mcp_config.json` for Streamable HTTP.
+- `GUIDE_MODE = "manual"`: built-in, client-specific connection instructions; this is the current setting.
+- `GUIDE_MODE = "plugins"`: links to published plugins, only after valid public URLs have been configured in `pluginLinks`.
 
-See [installation instructions](docs/INSTALL.md) for client-specific setup and [public directory submission checklist](docs/PUBLISHING.md) for separate approval and publication steps. **A GitHub-installable plugin is not yet listed in any curated provider directory.**
+The `/plugins.json` endpoint is a separate machine-readable catalog. It contains **only** plugin entries with configured HTTPS URLs; it does not list every client supported through manual MCP configuration. The Tsumu editor uses it to display approved plugin links. Adding an unpublished or local-only client to the manual guide does not publish it to the catalog.
+
+For distribution packaging, this repository includes a Claude plugin under [`plugins/claude`](plugins/claude), a Cursor manifest, a Gemini CLI extension and an Antigravity manifest. Presence in the repository does not imply approval or listing by the respective providers. See [installation instructions](docs/INSTALL.md) and [publishing checklist](docs/PUBLISHING.md).
+
 
 ## Skills and site drafts
 

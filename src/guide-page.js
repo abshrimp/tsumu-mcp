@@ -83,20 +83,96 @@ function pluginAppsSection(t) {
 }
 
 /** Manual mode: the MCP server URL, then step-by-step setup for each app. */
+
+const SETUP_CLIENTS = [
+  { id: "chatgpt", name: "ChatGPT", icon: "chatgpt" },
+  { id: "claude", name: "Claude", icon: "claude" },
+  { id: "cursor", name: "Cursor", icon: "cursor" },
+  { id: "vscode", name: "GitHub Copilot / VS Code", icon: "vscode" },
+  { id: "claude-code", name: "Claude Code", icon: "claude" },
+  { id: "codex", name: "OpenAI Codex", icon: "chatgpt" },
+  { id: "gemini", name: "Gemini CLI", icon: "gemini" },
+];
+
+const SETUP_COMMANDS = {
+  "claude-code": "claude mcp add --transport http tsumu https://mcp.tsumu.ebii.net/mcp",
+  codex: "codex mcp add tsumu --url https://mcp.tsumu.ebii.net/mcp",
+  gemini: "gemini mcp add --scope user --transport http tsumu https://mcp.tsumu.ebii.net/mcp",
+};
+
+const SETUP_LINKS = {
+  chatgpt: "https://chatgpt.com/plugins",
+  claude: "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Tsumu&connectorUrl=https%3A%2F%2Fmcp.tsumu.ebii.net%2Fmcp",
+  cursor: "cursor://anysphere.cursor-deeplink/mcp/install?name=tsumu&config=eyJ1cmwiOiJodHRwczovL21jcC50c3VtdS5lYmlpLm5ldC9tY3AifQ%3D%3D",
+  vscode: "vscode:mcp/install?%7B%22name%22%3A%22tsumu%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.tsumu.ebii.net%2Fmcp%22%7D",
+};
+
+const ADDITIONAL_STEPS = {
+  ja: {
+    vscode: [
+      { title: "VS CodeでTsumuを追加", body: "ボタンからMCPサーバーをインストールします。" },
+      { title: "接続を承認", body: "認証の確認が出たら許可し、下の共通の認可手順に進みます。" },
+    ],
+    "claude-code": [
+      { title: "ターミナルでコマンドを実行", body: "次のコマンドでTsumuを登録します。" },
+      { title: "Claude Codeで /mcp を開く", body: "tsumu を選択して Authenticate を押します。" },
+    ],
+    codex: [
+      { title: "ターミナルでコマンドを実行", body: "次のコマンドでTsumuを登録します。" },
+      { title: "ブラウザで認可", body: "表示された認可画面でアクセスするサイトを選択します。" },
+    ],
+  },
+  en: {
+    vscode: [
+      { title: "Add Tsumu in VS Code", body: "Use the button to install the MCP server." },
+      { title: "Approve the connection", body: "Allow authentication, then follow the common authorization steps below." },
+    ],
+    "claude-code": [
+      { title: "Run the terminal command", body: "Register Tsumu with the following command." },
+      { title: "Open /mcp in Claude Code", body: "Select tsumu, then choose Authenticate." },
+    ],
+    codex: [
+      { title: "Run the terminal command", body: "Register Tsumu with the following command." },
+      { title: "Authorize in the browser", body: "Choose the sites to permit on the authorization page." },
+    ],
+  },
+};
+
+function setupClientSteps(locale, m, client) {
+  if (client.id === "gemini") return m.clients.gemini.steps;
+  if (m.clients[client.id]) return m.clients[client.id].steps;
+  return ADDITIONAL_STEPS[locale][client.id];
+}
+
+function setupClientCard(locale, m, client) {
+  const steps = setupClientSteps(locale, m, client);
+  const link = SETUP_LINKS[client.id];
+  const command = SETUP_COMMANDS[client.id];
+  const action = link
+    ? "<p class='setup-action'><a class='btn btn-primary' href='" + escapeHtml(link) + "'" +
+      (link.startsWith("https:") ? " target='_blank' rel='noopener noreferrer'" : "") + ">" +
+      escapeHtml(locale === "ja" ? "接続設定を開く" : "Open setup") + icons.external + "</a></p>"
+    : "";
+  const stepsHtml = steps.map((item, index) => {
+    const cmd = command && index === 0 ? codeHtml(command) : "";
+    return "<li class='step no-image'><div><h4>" + escapeHtml(item.title) + "</h4><p>" +
+      escapeHtml(item.body) + "</p>" + (item.code ? codeHtml(item.code) : cmd) + "</div></li>";
+  }).join("");
+  return "<details class='setup-client' id='app-" + client.id + "'><summary><span class='app-icon'>" +
+    appIcon(client.icon, 28) + "</span><strong>" + escapeHtml(client.name) +
+    "</strong><span class='setup-chevron' aria-hidden='true'>⌄</span></summary>" +
+    "<div class='setup-client-body'>" + action + "<ol class='steps'>" + stepsHtml +
+    "</ol></div></details>";
+}
+
+/** The bundled setup guide is organized as collapsible client-specific instructions. */
 function manualAppsSection(locale, m) {
-  return "<section class='block' id='apps' aria-labelledby='apps-title'><h2 id='apps-title'>" + escapeHtml(m.appsTitle) + "</h2>" +
+  return "<section class='block' id='apps' aria-labelledby='apps-title'><h2 id='apps-title'>" +
+    escapeHtml(locale === "ja" ? "1. AIアプリを選ぶ" : "1. Choose your AI app") + "</h2>" +
     "<p class='section-lead'>" + escapeHtml(m.appsLead) + "</p>" +
-    "<div class='url-box'><span class='url-label'>" + escapeHtml(m.urlLabel) + "</span>" + codeHtml(MCP_URL) +
-      "<span class='url-help'>" + escapeHtml(m.urlHelp) + "</span></div>" +
-    "<ul class='app-jump'>" + PLUGIN_CLIENTS.map(client => "<li><a href='#app-" + client.id + "'>" + appIcon(client.id, 20) +
-      "<span>" + escapeHtml(client.name) + "</span></a></li>").join("") + "</ul>" +
-    PLUGIN_CLIENTS.map(client => {
-      const c = m.clients[client.id];
-      return "<article class='client' id='app-" + client.id + "' aria-labelledby='app-" + client.id + "-title'>" +
-        "<header class='client-head'><span class='app-icon' aria-hidden='true'>" + appIcon(client.id, 28) + "</span>" +
-        "<div class='app-name'><h3 id='app-" + client.id + "-title'>" + escapeHtml(client.name) + "</h3><span>" + escapeHtml(c.summary) + "</span></div></header>" +
-        "<ol class='steps'>" + c.steps.map(item => appStep(locale, item)).join("") + "</ol></article>";
-    }).join("") + "</section>";
+    "<div class='setup-clients'>" + SETUP_CLIENTS.map(client => setupClientCard(locale, m, client)).join("") + "</div>" +
+    "<div class='url-box'><span class='url-label'>" + escapeHtml(m.urlLabel) +
+    "</span>" + codeHtml(MCP_URL) + "<span class='url-help'>" + escapeHtml(m.urlHelp) + "</span></div></section>";
 }
 
 function flow(locale, id, title, items, note) {
@@ -126,7 +202,7 @@ export function guidePage(locale, mode = GUIDE_MODE) {
         "<a class='btn' href='" + TSUMU_URL + "'>" + escapeHtml(t.openTsumu) + "</a>" +
         "<a class='btn' href='" + REPO_URL + "'>" + icons.github + escapeHtml(t.viewSource) + "</a></div></div>" +
         "<div class='hero-apps'><p class='works-with'>" + escapeHtml(t.worksWith) + "</p><ul class='app-row'>" +
-          PLUGIN_CLIENTS.map(client => "<li><a href='#app-" + client.id + "'>" + appIcon(client.id, 22) +
+          (manual ? SETUP_CLIENTS : PLUGIN_CLIENTS).map(client => "<li><a href='#app-" + client.id + "'>" + appIcon(client.icon || client.id, 22) +
             "<span>" + escapeHtml(client.name) + "</span></a></li>").join("") + "</ul></div></section>" +
       "<nav aria-label='" + escapeHtml(t.tocLabel) + "'><ul class='toc'>" +
         [["apps", t.tocApps], ["new-site", t.tocNew], ["edit-site", t.tocEdit], ["trouble", t.tocTrouble]]

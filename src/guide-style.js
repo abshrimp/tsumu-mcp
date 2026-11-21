@@ -133,4 +133,28 @@ footer { border-top: 1px solid var(--border); }
   .app .btn, .app .soon { width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+
+/* Compact, accordion-based AI client setup (matches the supplied connection guide). */
+.setup-clients { display: grid; gap: 10px; margin: 24px 0; }
+.setup-client { background: var(--panel, #fff); border: 1px solid var(--border, #e3e6ea); border-radius: 16px; overflow: hidden; }
+.setup-client[open] { box-shadow: 0 12px 40px #1629470c; }
+.setup-client > summary { display: flex; align-items: center; gap: 14px; min-height: 78px; padding: 15px 20px; cursor: pointer; list-style: none; }
+.setup-client > summary::-webkit-details-marker { display: none; }
+.setup-client > summary strong { flex: 1; font-size: 16px; }
+.setup-client > summary .app-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border: 1px solid #e3e6ea; border-radius: 12px; background: #fff; }
+.setup-chevron { font-size: 25px; line-height: 1; color: #6b7177; transition: transform .2s; }
+.setup-client[open] .setup-chevron { transform: rotate(180deg); }
+.setup-client-body { margin: 0 20px; padding: 12px 0 20px; border-top: 1px solid #e3e6ea; }
+.setup-action { margin: 8px 0 14px; }
+.setup-client .steps { margin: 0; padding-left: 26px; }
+.setup-client .step { padding: 12px 0; }
+.setup-client .step::before { flex: none; }
+.setup-client .step.no-image { grid-template-columns: minmax(0,1fr); }
+.setup-client .step h4 { margin: 0; }
+.setup-client .code { overflow-x: auto; }
+@media (max-width: 600px) {
+  .setup-client > summary { padding: 12px 14px; }
+  .setup-client-body { margin: 0 14px; }
+}
+
 `;

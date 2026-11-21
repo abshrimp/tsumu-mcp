@@ -206,7 +206,7 @@ export function createServer(env, grantId, { draftOnly = false } = {}) {
     example: JSON.parse(skillFiles["tsumu-build-site/references/minimal-site.json"]),
   }));
   server.registerTool("stage_site_doc", {
-    description: "Temporarily stores a complete editable SiteDoc for importing as a separate new Tsumu site. Returns importUrl, expiresAt, sizeBytes, and siteName. The importUrl is a private, expiring one-time link containing a bearer secret in its URL fragment. Opening it in Tsumu imports the document; deletion is confirmed only after the new site is saved. This does not edit the currently paired site or publish a site. Input uses schemaVersion 1 with pages, pageOrder, nodes, assets, and styles.base.default for native CSS. Maximum 12 MiB; one-hour lifetime.",
+    description: "Temporarily stores a complete editable SiteDoc for importing as a separate new Tsumu site. Returns importUrl, expiresAt, sizeBytes, and siteName. The importUrl is a private, expiring one-time link containing a bearer secret in its URL fragment. Opening it in Tsumu imports the document; deletion is confirmed only after the new site is saved. This does not edit the currently paired site or publish a site. Input uses schemaVersion 1 with pages, pageOrder, nodes, assets, and styles.base.default for native CSS. Script element targets must be HTML attrId values (not SiteDoc node IDs), or @self in element scripts; unresolved targets are rejected. Maximum 12 MiB; one-hour lifetime.",
     inputSchema: z.strictObject({
       doc: z.record(z.string(), z.unknown()),
       editorOrigin: z.string().optional().describe("Optional Tsumu self-host origin, e.g. https://tsumu.example.org. Defaults to https://tsumu.ebii.net"),

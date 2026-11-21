@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { guidePage, guideResponse, guideCsp } from "../src/guide-page.js";
@@ -24,6 +25,9 @@ test("GET / serves the complete standalone user-supplied guide", () => {
     assert.ok(existsSync(new URL("../public/landing/assets/" + path, import.meta.url)));
   }
   assert.match(html, /https:\/\/github\.com\/abshrimp\/tsumu-mcp\/blob\/main\/docs\/PRIVACY\.md/);
+  assert.match(html, /data-i18n="footerPrivacy">プライバシーポリシー</span>/);
+  assert.match(html, /footerPrivacy: "Privacy Policy"/);
+  assert.match(html, /docs/PRIVACY\.md"><svg class="gh"/);
   assert.match(html, /https:\/\/mcp\.tsumu\.ebii\.net\/mcp/);
   assert.doesNotMatch(html, /class='setup-client'/, "old composed guide is not included");
 });
@@ -34,6 +38,10 @@ test("landing response keeps original inline script under hash-based CSP", async
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.equal(response.headers.get("content-security-policy"), guideCsp);
   assert.match(guideCsp, /script-src 'sha256-/);
+  const script = guidePage().match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, "standalone guide must contain a script");
+  const hash = createHash("sha256").update(script).digest("base64");
+  assert.ok(guideCsp.includes("'sha256-" + hash + "'"), "CSP must match the exact inline guide script");
   assert.doesNotMatch(guideCsp, /unsafe-eval/);
   assert.doesNotMatch(guideCsp, /script-src[^;]*'unsafe-inline'/);
   assert.equal(await response.text(), guidePage());

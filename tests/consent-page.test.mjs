@@ -62,7 +62,7 @@ test("show a trusted client icon only for a recognized domain", () => {
     ...details, clientName: "ChatGPT", clientDomain: "chatgpt.com", redirectHost: "chatgpt.com",
   }, "id", request(), "en");
   assert.ok(chatgpt.includes("src='/plugin-icons/chatgpt.svg'"));
-  assert.match(chatgpt, /Verified domain: chatgpt.com/);
+  assert.match(chatgpt, /Verified · chatgpt.com/);
   assert.ok(!chatgpt.includes("src='https://chatgpt.com/favicon.ico'"));
   assert.ok(chatgpt.includes("client-icon-fallback' aria-hidden='true'>C<img"));
 

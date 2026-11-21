@@ -69,7 +69,7 @@ test("the manual guide gives every client setup steps with the MCP URL", () => {
     assert.match(html, /id='app-vscode'/, "VS Code has a setup accordion");
     assert.match(html, /id='app-claude-code'/, "Claude Code has a setup accordion");
     assert.match(html, /id='app-codex'/, "Codex has a setup accordion");
-    assert.match(html, /gemini mcp add --scope user --transport http/);
+    assert.match(html, /gemini mcp add --transport http --scope user/);
     assert.doesNotMatch(html, /data-plugin=/, "no plugin buttons in manual mode");
     for (const path of [...html.matchAll(/src='(\/guide\/[^']+)'/g)].map(match => match[1])) {
       assert.ok(existsSync(new URL("../public" + path, import.meta.url)), "missing screenshot " + path);

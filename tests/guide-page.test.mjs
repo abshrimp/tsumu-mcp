@@ -9,7 +9,7 @@ test("GET / serves the complete standalone user-supplied guide", () => {
   const html = guidePage();
   assert.match(html, /^<!DOCTYPE html>/);
   assert.match(html, /<html lang="ja">/);
-  assert.match(html, /<script>/);
+  assert.match(html, /<script>/i);
   assert.match(html, /data-lang="en"/);
   for (const name of ["chatgpt", "claude", "cursor", "vscode", "gemini"]) {
     assert.match(html, new RegExp("/landing/assets/" + name + "\\.svg"));
@@ -38,7 +38,7 @@ test("landing response keeps original inline script under hash-based CSP", async
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.equal(response.headers.get("content-security-policy"), guideCsp);
   assert.match(guideCsp, /script-src 'sha256-/);
-  const script = guidePage().match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  const script = guidePage().match(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/i)?.[1];
   assert.ok(script, "standalone guide must contain a script");
   const hash = createHash("sha256").update(script).digest("base64");
   assert.ok(guideCsp.includes("'sha256-" + hash + "'"), "CSP must match the exact inline guide script");

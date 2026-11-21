@@ -133,7 +133,6 @@ footer { border-top: 1px solid var(--border); }
   .app .btn, .app .soon { width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
-`;
 
 /* Compact, accordion-based AI client setup (matches the supplied connection guide). */
 .setup-clients { display: grid; gap: 10px; margin: 24px 0; }
@@ -157,3 +156,5 @@ footer { border-top: 1px solid var(--border); }
   .setup-client > summary { padding: 12px 14px; }
   .setup-client-body { margin: 0 14px; }
 }
+
+`;

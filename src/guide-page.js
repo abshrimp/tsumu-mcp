@@ -8,7 +8,7 @@ export function guidePage() {
 
 // Restrict the inline script to the exact SHA-256 of the supplied script.
 export const guideCsp = "default-src 'none'; style-src 'unsafe-inline'; " +
-  "script-src 'sha256-50Ac1VFsi6LBVhXMWFnIRa5yW0/EBXNkWWr5h+bb4hE='; " +
+  "script-src 'sha256-IuPNTumgoi6Hpp0DwvrEFlzyphbSnt2sKNCds6kM6KA='; " +
   "img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
 export function guideResponse(_locale, method = "GET") {

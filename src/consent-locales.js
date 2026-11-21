@@ -34,7 +34,7 @@ export const consentMessages = {
   ja: {
     pageTitle: "AIアプリとの接続 | Tsumu",
     title: "Tsumuへの接続",
-    intro: "接続元のアプリを確認し、許可する操作を選択してください。",
+    intro: "接続元のアプリを確認し、接続するサイトを選択してください。",
     existingSite: "既存のサイトを接続",
     newSite: "新しいサイトを作成",
     newSiteHelp: "既存サイトへのアクセスは許可されません",

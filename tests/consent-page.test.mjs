@@ -145,7 +145,7 @@ test("language links preserve the OAuth parameters and never reflect unescaped c
 
 test("show unverified identities and a loopback warning in connection details", () => {
   const html = consentPage({ ...details, clientDomain: null, redirectIsLoopback: true }, "id", request(), "en");
-  assert.match(html, /identity not verified/);
+  assert.match(html, /Identity unverified/);
   assert.match(html, /running on your device/);
 });
 

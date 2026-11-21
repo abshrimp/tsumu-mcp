@@ -5,7 +5,6 @@ import { importDraftRequest } from "./drafts.js";
 import { authorize } from "./oauth.js";
 import { guideResponse } from "./guide-page.js";
 import { pluginCatalogResponse } from "./guide-links.js";
-import { consentLocale } from "./consent-locales.js";
 import { serveAuthenticatedMcp } from "./mcp-handler.js";
 import { RESOURCE, ISSUER } from "./mcp-metadata.js";
 
@@ -24,8 +23,7 @@ const defaultHandler = {
       });
     }
     if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
-      // ?lang=ja|en wins; otherwise the browser's Accept-Language decides (English by default).
-      return guideResponse(consentLocale(request), request.method);
+      return guideResponse(undefined, request.method);
     }
     if (pathname === "/plugins.json") return pluginCatalogResponse(request);
     if (pathname === "/authorize") return authorize(request, env);
